@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <title>Voice to Notion</title>
+
+  <link
+    rel="stylesheet"
+    href="popup.css"
+  />
+</head>
+
+<body>
+  <main class="container">
+
+    <header class="header">
+      <p class="eyebrow">
+        AI PRODUCTIVITY
+      </p>
+
+      <h1>
+        Voice to Notion
+      </h1>
+
+      <p class="subtitle">
+        Record a thought and turn it into a structured Notion note.
+      </p>
+    </header>
+
+    <section class="card">
+
+      <div class="recording-header">
+        <div>
+          <h2>
+            Voice Capture
+          </h2>
+
+          <p class="muted">
+            Record your note below.
+          </p>
+        </div>
+
+        <span
+          id="timer"
+          class="timer"
+        >
+          00:00
+        </span>
+      </div>
+
+      <button
+        id="recordButton"
+        class="primary-button"
+        type="button"
+      >
+        Start Recording
+      </button>
+
+      <p
+        id="status"
+        class="status"
+      >
+        Microphone ready
+      </p>
+
+      <audio
+        id="audioPlayer"
+        controls
+        hidden
+      ></audio>
+
+    </section>
+
+    <section
+      id="resultSection"
+      class="card"
+      hidden
+    >
+
+      <div class="section-header">
+        <h2>
+          Transcript
+        </h2>
+
+        <span
+          id="transcriptStatus"
+          class="status-badge"
+        >
+          Ready
+        </span>
+      </div>
+
+      <textarea
+        id="transcript"
+        rows="5"
+        placeholder="Your transcript will appear here..."
+      ></textarea>
+
+      <button
+        id="restructureButton"
+        class="secondary-button"
+        type="button"
+      >
+        Re-structure Transcript
+      </button>
+
+    </section>
+
+    <section
+      id="structuredSection"
+      class="card"
+      hidden
+    >
+
+      <div class="section-header">
+
+        <div>
+          <h2>
+            Structured Note
+          </h2>
+
+          <p class="muted">
+            Review and edit before saving.
+          </p>
+        </div>
+
+        <span
+          id="structuredStatus"
+          class="status-badge"
+        >
+          Ready
+        </span>
+
+      </div>
+
+      <div class="field">
+        <label for="title">
+          Title
+        </label>
+
+        <input
+          id="title"
+          type="text"
+        />
+      </div>
+
+      <div class="field">
+        <label for="summary">
+          Summary
+        </label>
+
+        <textarea
+          id="summary"
+          rows="4"
+        ></textarea>
+      </div>
+
+      <div class="field-grid">
+
+        <div class="field">
+          <label for="category">
+            Category
+          </label>
+
+          <input
+            id="category"
+            type="text"
+          />
+        </div>
+
+        <div class="field">
+          <label for="dueDate">
+            Due Date
+          </label>
+
+          <input
+            id="dueDate"
+            type="date"
+          />
+        </div>
+
+      </div>
+
+      <div class="field">
+
+        <div class="action-header">
+
+          <label>
+            Action Items
+          </label>
+
+          <button
+            id="addActionButton"
+            class="text-button"
+            type="button"
+          >
+            + Add
+          </button>
+
+        </div>
+
+        <div
+          id="actionItems"
+          class="action-items"
+        ></div>
+
+      </div>
+
+      <div class="save-section">
+
+        <button
+          id="saveButton"
+          class="save-button"
+          type="button"
+        >
+          Save to Notion
+        </button>
+
+        <div
+          id="successBox"
+          class="success"
+          hidden
+        >
+          Note saved successfully to Notion.
+        </div>
+
+        <a
+          id="notionLink"
+          class="notion-link"
+          href="#"
+          target="_blank"
+          rel="noreferrer"
+          hidden
+        >
+          Open in Notion
+        </a>
+
+      </div>
+
+    </section>
+
+    <div
+      id="errorBox"
+      class="error"
+      hidden
+    ></div>
+
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

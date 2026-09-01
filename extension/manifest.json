@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Voice to Notion",
+  "version": "0.1.1",
+  "description": "Capture voice notes and send structured notes to Notion.",
+
+  "action": {
+    "default_title": "Voice to Notion",
+    "default_popup": "popup.html"
+  },
+
+  "permissions": [
+    "tabs"
+  ],
+
+  "host_permissions": [
+    "http://localhost:3000/*"
+  ]
+}
