@@ -14,6 +14,6 @@
   ],
 
   "host_permissions": [
-    "http://localhost:3000/*"
-  ]
+  "https://voice-to-notion-omega.vercel.app/*"
+]
 }

@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://voice-to-notion-omega.vercel.app";
 
 const recordButton =
   document.getElementById("recordButton");
