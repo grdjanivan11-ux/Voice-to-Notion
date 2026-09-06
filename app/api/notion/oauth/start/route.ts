@@ -1,13 +1,21 @@
+import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const clientId =
     process.env.NOTION_OAUTH_CLIENT_ID;
 
+  const clientSecret =
+    process.env.NOTION_OAUTH_CLIENT_SECRET;
+
   const redirectUri =
     process.env.NOTION_OAUTH_REDIRECT_URI;
 
-  if (!clientId || !redirectUri) {
+  if (
+    !clientId ||
+    !clientSecret ||
+    !redirectUri
+  ) {
     return NextResponse.json(
       {
         error:
@@ -19,7 +27,22 @@ export async function GET() {
     );
   }
 
-  const state = crypto.randomUUID();
+  const timestamp = Date.now();
+  const nonce = crypto.randomUUID();
+
+  const payload =
+    `${timestamp}.${nonce}`;
+
+  const signature =
+    createHmac(
+      "sha256",
+      clientSecret
+    )
+      .update(payload)
+      .digest("hex");
+
+  const state =
+    `${payload}.${signature}`;
 
   const authorizationUrl =
     new URL(
@@ -51,24 +74,7 @@ export async function GET() {
     state
   );
 
-  const response =
-    NextResponse.redirect(
-      authorizationUrl.toString()
-    );
-
-  response.cookies.set(
-    "notion_oauth_state",
-    state,
-    {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV ===
-        "production",
-      sameSite: "lax",
-      maxAge: 10 * 60,
-      path: "/",
-    }
+  return NextResponse.redirect(
+    authorizationUrl.toString()
   );
-
-  return response;
 }

@@ -1,7 +1,9 @@
 import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+  createHmac,
+  timingSafeEqual,
+} from "node:crypto";
+
+import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -20,8 +22,85 @@ type NotionOAuthResponse = {
   error?: string;
 };
 
+function validateState(
+  state: string,
+  secret: string
+) {
+  const parts =
+    state.split(".");
+
+  if (parts.length !== 3) {
+    return false;
+  }
+
+  const [
+    timestampString,
+    nonce,
+    receivedSignature,
+  ] = parts;
+
+  const timestamp =
+    Number(timestampString);
+
+  if (
+    !Number.isFinite(timestamp) ||
+    !nonce ||
+    !receivedSignature
+  ) {
+    return false;
+  }
+
+  const maxAge =
+    10 * 60 * 1000;
+
+  const age =
+    Date.now() - timestamp;
+
+  if (
+    age < 0 ||
+    age > maxAge
+  ) {
+    return false;
+  }
+
+  const payload =
+    `${timestampString}.${nonce}`;
+
+  const expectedSignature =
+    createHmac(
+      "sha256",
+      secret
+    )
+      .update(payload)
+      .digest("hex");
+
+  const receivedBuffer =
+    Buffer.from(
+      receivedSignature,
+      "utf8"
+    );
+
+  const expectedBuffer =
+    Buffer.from(
+      expectedSignature,
+      "utf8"
+    );
+
+  if (
+    receivedBuffer.length !==
+    expectedBuffer.length
+  ) {
+    return false;
+  }
+
+  return timingSafeEqual(
+    receivedBuffer,
+    expectedBuffer
+  );
+}
+
 export async function GET(
-  request: NextRequest
+  request: Request
 ) {
   try {
     const url =
@@ -36,32 +115,11 @@ export async function GET(
     const returnedState =
       url.searchParams.get("state");
 
-    const storedState =
-      request.cookies.get(
-        "notion_oauth_state"
-      )?.value;
-
     if (oauthError) {
       return NextResponse.json(
         {
           error:
             `Notion authorization failed: ${oauthError}`,
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (
-      !returnedState ||
-      !storedState ||
-      returnedState !== storedState
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid OAuth state.",
         },
         {
           status: 400,
@@ -102,6 +160,24 @@ export async function GET(
         },
         {
           status: 500,
+        }
+      );
+    }
+
+    if (
+      !returnedState ||
+      !validateState(
+        returnedState,
+        clientSecret
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid OAuth state.",
+        },
+        {
+          status: 400,
         }
       );
     }
@@ -257,34 +333,27 @@ export async function GET(
       }
     );
 
-    const response =
-      NextResponse.json({
-        success: true,
+    return NextResponse.json({
+      success: true,
 
-        workspace: {
-          id:
-            data.workspace_id,
+      workspace: {
+        id:
+          data.workspace_id,
 
-          name:
-            data.workspace_name ??
-            null,
+        name:
+          data.workspace_name ??
+          null,
 
-          icon:
-            data.workspace_icon ??
-            null,
-        },
+        icon:
+          data.workspace_icon ??
+          null,
+      },
 
-        saved: true,
+      saved: true,
 
-        message:
-          "Notion connected and saved successfully.",
-      });
-
-    response.cookies.delete(
-      "notion_oauth_state"
-    );
-
-    return response;
+      message:
+        "Notion connected and saved successfully.",
+    });
   } catch (error) {
     console.error(
       "NOTION OAUTH CALLBACK ERROR:",
