@@ -19,6 +19,8 @@ export async function GET() {
     );
   }
 
+  const state = crypto.randomUUID();
+
   const authorizationUrl =
     new URL(
       "https://api.notion.com/v1/oauth/authorize"
@@ -44,7 +46,29 @@ export async function GET() {
     "user"
   );
 
-  return NextResponse.redirect(
-    authorizationUrl.toString()
+  authorizationUrl.searchParams.set(
+    "state",
+    state
   );
+
+  const response =
+    NextResponse.redirect(
+      authorizationUrl.toString()
+    );
+
+  response.cookies.set(
+    "notion_oauth_state",
+    state,
+    {
+      httpOnly: true,
+      secure:
+        process.env.NODE_ENV ===
+        "production",
+      sameSite: "lax",
+      maxAge: 10 * 60,
+      path: "/",
+    }
+  );
+
+  return response;
 }

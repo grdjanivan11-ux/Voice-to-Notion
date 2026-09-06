@@ -1,21 +1,31 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type NotionOAuthResponse = {
   access_token?: string;
   refresh_token?: string;
   token_type?: string;
   bot_id?: string;
+
   workspace_id?: string;
   workspace_name?: string;
   workspace_icon?: string | null;
+
+  owner?: unknown;
+
   error?: string;
 };
 
 export async function GET(
-  request: Request
+  request: NextRequest
 ) {
   try {
-    const url = new URL(request.url);
+    const url =
+      new URL(request.url);
 
     const code =
       url.searchParams.get("code");
@@ -23,11 +33,35 @@ export async function GET(
     const oauthError =
       url.searchParams.get("error");
 
+    const returnedState =
+      url.searchParams.get("state");
+
+    const storedState =
+      request.cookies.get(
+        "notion_oauth_state"
+      )?.value;
+
     if (oauthError) {
       return NextResponse.json(
         {
           error:
             `Notion authorization failed: ${oauthError}`,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      !returnedState ||
+      !storedState ||
+      returnedState !== storedState
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid OAuth state.",
         },
         {
           status: 400,
@@ -77,37 +111,38 @@ export async function GET(
         `${clientId}:${clientSecret}`
       ).toString("base64");
 
-    const response = await fetch(
-      "https://api.notion.com/v1/oauth/token",
-      {
-        method: "POST",
+    const tokenResponse =
+      await fetch(
+        "https://api.notion.com/v1/oauth/token",
+        {
+          method: "POST",
 
-        headers: {
-          Authorization:
-            `Basic ${basicAuth}`,
+          headers: {
+            Authorization:
+              `Basic ${basicAuth}`,
 
-          "Content-Type":
-            "application/json",
-        },
+            "Content-Type":
+              "application/json",
+          },
 
-        body: JSON.stringify({
-          grant_type:
-            "authorization_code",
+          body: JSON.stringify({
+            grant_type:
+              "authorization_code",
 
-          code,
+            code,
 
-          redirect_uri:
-            redirectUri,
-        }),
-      }
-    );
+            redirect_uri:
+              redirectUri,
+          }),
+        }
+      );
 
     const data =
-      (await response.json()) as NotionOAuthResponse;
+      (await tokenResponse.json()) as NotionOAuthResponse;
 
-    if (!response.ok) {
+    if (!tokenResponse.ok) {
       console.error(
-        "NOTION OAUTH ERROR:",
+        "NOTION OAUTH TOKEN ERROR:",
         data
       );
 
@@ -115,18 +150,97 @@ export async function GET(
         {
           error:
             "Could not exchange the Notion authorization code.",
+
           details:
             data.error ??
             "Unknown Notion OAuth error",
         },
         {
-          status: response.status,
+          status:
+            tokenResponse.status,
+        }
+      );
+    }
+
+    if (!data.access_token) {
+      return NextResponse.json(
+        {
+          error:
+            "Notion did not return an access token.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (!data.workspace_id) {
+      return NextResponse.json(
+        {
+          error:
+            "Notion did not return a workspace ID.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const connection = {
+      workspace_id:
+        data.workspace_id,
+
+      workspace_name:
+        data.workspace_name ?? null,
+
+      access_token:
+        data.access_token,
+
+      ...(data.refresh_token
+        ? {
+            refresh_token:
+              data.refresh_token,
+          }
+        : {}),
+
+      updated_at:
+        new Date().toISOString(),
+    };
+
+    const {
+      error: databaseError,
+    } =
+      await supabaseAdmin
+        .from(
+          "notion_connections"
+        )
+        .upsert(
+          connection,
+          {
+            onConflict:
+              "workspace_id",
+          }
+        );
+
+    if (databaseError) {
+      console.error(
+        "NOTION CONNECTION SAVE ERROR:",
+        databaseError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Notion connected, but the connection could not be saved.",
+        },
+        {
+          status: 500,
         }
       );
     }
 
     console.log(
-      "NOTION OAUTH SUCCESS:",
+      "NOTION CONNECTION SAVED:",
       {
         workspaceId:
           data.workspace_id,
@@ -134,13 +248,7 @@ export async function GET(
         workspaceName:
           data.workspace_name,
 
-        botId:
-          data.bot_id,
-
-        hasAccessToken:
-          Boolean(
-            data.access_token
-          ),
+        hasAccessToken: true,
 
         hasRefreshToken:
           Boolean(
@@ -149,26 +257,34 @@ export async function GET(
       }
     );
 
-    return NextResponse.json({
-      success: true,
+    const response =
+      NextResponse.json({
+        success: true,
 
-      workspace: {
-        id:
-          data.workspace_id ??
-          null,
+        workspace: {
+          id:
+            data.workspace_id,
 
-        name:
-          data.workspace_name ??
-          null,
+          name:
+            data.workspace_name ??
+            null,
 
-        icon:
-          data.workspace_icon ??
-          null,
-      },
+          icon:
+            data.workspace_icon ??
+            null,
+        },
 
-      message:
-        "Notion connected successfully.",
-    });
+        saved: true,
+
+        message:
+          "Notion connected and saved successfully.",
+      });
+
+    response.cookies.delete(
+      "notion_oauth_state"
+    );
+
+    return response;
   } catch (error) {
     console.error(
       "NOTION OAUTH CALLBACK ERROR:",
