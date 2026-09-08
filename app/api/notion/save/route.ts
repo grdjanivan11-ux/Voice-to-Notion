@@ -1,9 +1,7 @@
 import { Client } from "@notionhq/client";
 import { NextResponse } from "next/server";
 
-const notion = new Client({
-  auth: process.env.NOTION_TOKEN,
-});
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 type SaveNoteRequest = {
   title: string;
@@ -12,11 +10,15 @@ type SaveNoteRequest = {
   category: string;
   dueDate: string | null;
   transcript: string;
+  workspaceId: string;
 };
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
-    const body = (await request.json()) as SaveNoteRequest;
+    const body =
+      (await request.json()) as SaveNoteRequest;
 
     const {
       title,
@@ -25,36 +27,22 @@ export async function POST(request: Request) {
       category,
       dueDate,
       transcript,
+      workspaceId,
     } = body;
 
-    const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
+    /*
+      BASIC VALIDATION
+    */
 
-    if (!dataSourceId) {
+    if (
+      !workspaceId ||
+      typeof workspaceId !==
+        "string"
+    ) {
       return NextResponse.json(
         {
-          error: "NOTION_DATA_SOURCE_ID is missing.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    if (!process.env.NOTION_TOKEN) {
-      return NextResponse.json(
-        {
-          error: "NOTION_TOKEN is missing.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    if (!title || typeof title !== "string") {
-      return NextResponse.json(
-        {
-          error: "Title is required.",
+          error:
+            "workspaceId is required.",
         },
         {
           status: 400,
@@ -62,10 +50,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Array.isArray(actionItems)) {
+    if (
+      !title ||
+      typeof title !==
+        "string"
+    ) {
       return NextResponse.json(
         {
-          error: "Action items must be an array.",
+          error:
+            "Title is required.",
         },
         {
           status: 400,
@@ -73,152 +66,370 @@ export async function POST(request: Request) {
       );
     }
 
-    const page = await notion.pages.create({
-      parent: {
-        type: "data_source_id",
-        data_source_id: dataSourceId,
-      },
+    if (
+      !Array.isArray(
+        actionItems
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Action items must be an array.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-      properties: {
-        Name: {
-          type: "title",
-          title: [
-            {
-              type: "text",
-              text: {
-                content: title,
+    /*
+      LOAD USER'S NOTION CONNECTION
+      FROM SUPABASE
+    */
+
+    const {
+      data: connection,
+      error:
+        connectionError,
+    } =
+      await supabaseAdmin
+        .from(
+          "notion_connections"
+        )
+        .select(
+          `
+            workspace_id,
+            workspace_name,
+            access_token,
+            selected_data_source_id
+          `
+        )
+        .eq(
+          "workspace_id",
+          workspaceId
+        )
+        .single();
+
+    if (
+      connectionError ||
+      !connection
+    ) {
+      console.error(
+        "NOTION CONNECTION LOOKUP ERROR:",
+        connectionError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "No Notion connection was found for this workspace.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    /*
+      MAKE SURE USER SELECTED
+      A DESTINATION DATABASE
+    */
+
+    if (
+      !connection.selected_data_source_id
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "No Notion destination has been selected.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+      CREATE NOTION CLIENT USING
+      THE USER'S OAUTH TOKEN
+    */
+
+    const notion =
+      new Client({
+        auth:
+          connection.access_token,
+      });
+
+    /*
+      CLEAN ACTION ITEMS
+    */
+
+    const cleanActionItems =
+      actionItems
+        .map((item) =>
+          typeof item ===
+          "string"
+            ? item.trim()
+            : ""
+        )
+        .filter(Boolean);
+
+    /*
+      CREATE NOTION PAGE
+    */
+
+    const page =
+      await notion.pages.create({
+        parent: {
+          type:
+            "data_source_id",
+
+          data_source_id:
+            connection.selected_data_source_id,
+        },
+
+        properties: {
+          Name: {
+            type: "title",
+
+            title: [
+              {
+                type: "text",
+
+                text: {
+                  content:
+                    title.trim(),
+                },
               },
-            },
-          ],
-        },
+            ],
+          },
 
-        Category: {
-          type: "select",
-          select: category
+          Category: {
+            type: "select",
+
+            select:
+              category.trim()
+                ? {
+                    name:
+                      category.trim(),
+                  }
+                : null,
+          },
+
+          ...(dueDate
             ? {
-                name: category,
+                "Due Date": {
+                  type:
+                    "date" as const,
+
+                  date: {
+                    start:
+                      dueDate,
+
+                    end: null,
+
+                    time_zone:
+                      null,
+                  },
+                },
               }
-            : null,
+            : {}),
         },
 
-        ...(dueDate
-          ? {
-              "Due Date": {
-                type: "date" as const,
-                date: {
-                  start: dueDate,
-                  end: null,
-                  time_zone: null,
-                },
-              },
-            }
-          : {}),
-      },
+        children: [
+          /*
+            SUMMARY
+          */
 
-      children: [
-        {
-          object: "block",
-          type: "heading_2",
-          heading_2: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: "Summary",
-                },
-              },
-            ],
-            is_toggleable: false,
-          },
-        },
+          {
+            object:
+              "block",
 
-        {
-          object: "block",
-          type: "paragraph",
-          paragraph: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: summary || "No summary available.",
-                },
-              },
-            ],
-          },
-        },
+            type:
+              "heading_2",
 
-        {
-          object: "block",
-          type: "heading_2",
-          heading_2: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: "Action Items",
-                },
-              },
-            ],
-            is_toggleable: false,
-          },
-        },
+            heading_2: {
+              rich_text: [
+                {
+                  type:
+                    "text",
 
-        ...actionItems.map((item) => ({
-          object: "block" as const,
-          type: "to_do" as const,
-          to_do: {
-            rich_text: [
-              {
-                type: "text" as const,
-                text: {
-                  content: item,
+                  text: {
+                    content:
+                      "Summary",
+                  },
                 },
-              },
-            ],
-            checked: false,
-          },
-        })),
+              ],
 
-        {
-          object: "block",
-          type: "heading_2",
-          heading_2: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: "Original Transcript",
-                },
-              },
-            ],
-            is_toggleable: false,
+              is_toggleable:
+                false,
+            },
           },
-        },
 
-        {
-          object: "block",
-          type: "paragraph",
-          paragraph: {
-            rich_text: [
-              {
-                type: "text",
-                text: {
-                  content: transcript || "No transcript available.",
+          {
+            object:
+              "block",
+
+            type:
+              "paragraph",
+
+            paragraph: {
+              rich_text: [
+                {
+                  type:
+                    "text",
+
+                  text: {
+                    content:
+                      summary.trim() ||
+                      "No summary available.",
+                  },
                 },
-              },
-            ],
+              ],
+            },
           },
-        },
-      ],
-    });
+
+          /*
+            ACTION ITEMS
+          */
+
+          {
+            object:
+              "block",
+
+            type:
+              "heading_2",
+
+            heading_2: {
+              rich_text: [
+                {
+                  type:
+                    "text",
+
+                  text: {
+                    content:
+                      "Action Items",
+                  },
+                },
+              ],
+
+              is_toggleable:
+                false,
+            },
+          },
+
+          ...cleanActionItems.map(
+            (item) => ({
+              object:
+                "block" as const,
+
+              type:
+                "to_do" as const,
+
+              to_do: {
+                rich_text: [
+                  {
+                    type:
+                      "text" as const,
+
+                    text: {
+                      content:
+                        item,
+                    },
+                  },
+                ],
+
+                checked:
+                  false,
+              },
+            })
+          ),
+
+          /*
+            ORIGINAL TRANSCRIPT
+          */
+
+          {
+            object:
+              "block",
+
+            type:
+              "heading_2",
+
+            heading_2: {
+              rich_text: [
+                {
+                  type:
+                    "text",
+
+                  text: {
+                    content:
+                      "Original Transcript",
+                  },
+                },
+              ],
+
+              is_toggleable:
+                false,
+            },
+          },
+
+          {
+            object:
+              "block",
+
+            type:
+              "paragraph",
+
+            paragraph: {
+              rich_text: [
+                {
+                  type:
+                    "text",
+
+                  text: {
+                    content:
+                      transcript.trim() ||
+                      "No transcript available.",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+    /*
+      SUCCESS
+    */
 
     return NextResponse.json({
       success: true,
-      pageId: page.id,
-      url: "url" in page ? page.url : null,
+
+      pageId:
+        page.id,
+
+      url:
+        "url" in page
+          ? page.url
+          : null,
+
+      workspace: {
+        id:
+          connection.workspace_id,
+
+        name:
+          connection.workspace_name,
+      },
+
+      dataSourceId:
+        connection.selected_data_source_id,
     });
   } catch (error) {
-    console.error("NOTION SAVE ERROR:", error);
+    console.error(
+      "NOTION SAVE ERROR:",
+      error
+    );
 
     const message =
       error instanceof Error
@@ -227,8 +438,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "Failed to save note to Notion.",
-        details: message,
+        error:
+          "Failed to save note to Notion.",
+
+        details:
+          message,
       },
       {
         status: 500,

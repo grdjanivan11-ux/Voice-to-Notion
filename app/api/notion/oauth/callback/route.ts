@@ -10,135 +10,22 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 type NotionOAuthResponse = {
   access_token?: string;
   refresh_token?: string;
-  token_type?: string;
-  bot_id?: string;
 
   workspace_id?: string;
   workspace_name?: string;
-  workspace_icon?: string | null;
+  workspace_icon?: string;
 
   owner?: unknown;
 
+  duplicated_template_id?: string | null;
+
   error?: string;
 };
-
-function validateState(
-  state: string,
-  secret: string
-) {
-  const parts =
-    state.split(".");
-
-  if (parts.length !== 3) {
-    return false;
-  }
-
-  const [
-    timestampString,
-    nonce,
-    receivedSignature,
-  ] = parts;
-
-  const timestamp =
-    Number(timestampString);
-
-  if (
-    !Number.isFinite(timestamp) ||
-    !nonce ||
-    !receivedSignature
-  ) {
-    return false;
-  }
-
-  const maxAge =
-    10 * 60 * 1000;
-
-  const age =
-    Date.now() - timestamp;
-
-  if (
-    age < 0 ||
-    age > maxAge
-  ) {
-    return false;
-  }
-
-  const payload =
-    `${timestampString}.${nonce}`;
-
-  const expectedSignature =
-    createHmac(
-      "sha256",
-      secret
-    )
-      .update(payload)
-      .digest("hex");
-
-  const receivedBuffer =
-    Buffer.from(
-      receivedSignature,
-      "utf8"
-    );
-
-  const expectedBuffer =
-    Buffer.from(
-      expectedSignature,
-      "utf8"
-    );
-
-  if (
-    receivedBuffer.length !==
-    expectedBuffer.length
-  ) {
-    return false;
-  }
-
-  return timingSafeEqual(
-    receivedBuffer,
-    expectedBuffer
-  );
-}
 
 export async function GET(
   request: Request
 ) {
   try {
-    const url =
-      new URL(request.url);
-
-    const code =
-      url.searchParams.get("code");
-
-    const oauthError =
-      url.searchParams.get("error");
-
-    const returnedState =
-      url.searchParams.get("state");
-
-    if (oauthError) {
-      return NextResponse.json(
-        {
-          error:
-            `Notion authorization failed: ${oauthError}`,
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (!code) {
-      return NextResponse.json(
-        {
-          error:
-            "Authorization code is missing.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     const clientId =
       process.env.NOTION_OAUTH_CLIENT_ID;
 
@@ -164,11 +51,170 @@ export async function GET(
       );
     }
 
+    const url =
+      new URL(
+        request.url
+      );
+
+    const code =
+      url.searchParams.get(
+        "code"
+      );
+
+    const state =
+      url.searchParams.get(
+        "state"
+      );
+
+    const notionError =
+      url.searchParams.get(
+        "error"
+      );
+
+    if (notionError) {
+      return NextResponse.json(
+        {
+          error:
+            `Notion authorization failed: ${notionError}`,
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!code) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing OAuth code.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!state) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing OAuth state.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+      VERIFY SIGNED STATE
+
+      timestamp.nonce.userId.signature
+    */
+
+    const stateParts =
+      state.split(".");
+
     if (
-      !returnedState ||
-      !validateState(
-        returnedState,
+      stateParts.length !==
+      4
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid OAuth state.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const [
+      timestampString,
+      nonce,
+      userId,
+      receivedSignature,
+    ] = stateParts;
+
+    const timestamp =
+      Number(
+        timestampString
+      );
+
+    if (
+      !Number.isFinite(
+        timestamp
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid OAuth state timestamp.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+      State expires after 10 minutes.
+    */
+
+    const MAX_STATE_AGE =
+      10 * 60 * 1000;
+
+    const age =
+      Date.now() -
+      timestamp;
+
+    if (
+      age < 0 ||
+      age >
+        MAX_STATE_AGE
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "OAuth state expired. Please connect Notion again.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const payload =
+      `${timestampString}.${nonce}.${userId}`;
+
+    const expectedSignature =
+      createHmac(
+        "sha256",
         clientSecret
+      )
+        .update(payload)
+        .digest("hex");
+
+    const expectedBuffer =
+      Buffer.from(
+        expectedSignature,
+        "hex"
+      );
+
+    const receivedBuffer =
+      Buffer.from(
+        receivedSignature,
+        "hex"
+      );
+
+    if (
+      expectedBuffer.length !==
+        receivedBuffer.length ||
+      !timingSafeEqual(
+        expectedBuffer,
+        receivedBuffer
       )
     ) {
       return NextResponse.json(
@@ -182,16 +228,59 @@ export async function GET(
       );
     }
 
+    /*
+      EXTRA CHECK:
+      make sure this user still exists
+      in Supabase Auth.
+    */
+
+    const {
+      data: userData,
+      error:
+        userLookupError,
+    } =
+      await supabaseAdmin.auth.admin.getUserById(
+        userId
+      );
+
+    if (
+      userLookupError ||
+      !userData.user
+    ) {
+      console.error(
+        "OAUTH USER LOOKUP ERROR:",
+        userLookupError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "The Voice to Notion user no longer exists.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    /*
+      EXCHANGE NOTION CODE
+      FOR ACCESS TOKEN
+    */
+
     const basicAuth =
       Buffer.from(
         `${clientId}:${clientSecret}`
-      ).toString("base64");
+      ).toString(
+        "base64"
+      );
 
     const tokenResponse =
       await fetch(
         "https://api.notion.com/v1/oauth/token",
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             Authorization:
@@ -201,35 +290,37 @@ export async function GET(
               "application/json",
           },
 
-          body: JSON.stringify({
-            grant_type:
-              "authorization_code",
+          body:
+            JSON.stringify(
+              {
+                grant_type:
+                  "authorization_code",
 
-            code,
+                code,
 
-            redirect_uri:
-              redirectUri,
-          }),
+                redirect_uri:
+                  redirectUri,
+              }
+            ),
         }
       );
 
     const data =
       (await tokenResponse.json()) as NotionOAuthResponse;
 
-    if (!tokenResponse.ok) {
+    if (
+      !tokenResponse.ok
+    ) {
       console.error(
-        "NOTION OAUTH TOKEN ERROR:",
+        "NOTION TOKEN EXCHANGE ERROR:",
         data
       );
 
       return NextResponse.json(
         {
           error:
-            "Could not exchange the Notion authorization code.",
-
-          details:
-            data.error ??
-            "Unknown Notion OAuth error",
+            data.error ||
+            "Could not exchange the Notion OAuth code.",
         },
         {
           status:
@@ -238,11 +329,14 @@ export async function GET(
       );
     }
 
-    if (!data.access_token) {
+    if (
+      !data.access_token ||
+      !data.workspace_id
+    ) {
       return NextResponse.json(
         {
           error:
-            "Notion did not return an access token.",
+            "Notion returned an incomplete OAuth response.",
         },
         {
           status: 500,
@@ -250,24 +344,21 @@ export async function GET(
       );
     }
 
-    if (!data.workspace_id) {
-      return NextResponse.json(
-        {
-          error:
-            "Notion did not return a workspace ID.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
+    /*
+      SAVE CONNECTION TO THE
+      LOGGED-IN VOICE TO NOTION USER
+    */
 
     const connection = {
+      user_id:
+        userId,
+
       workspace_id:
         data.workspace_id,
 
       workspace_name:
-        data.workspace_name ?? null,
+        data.workspace_name ??
+        null,
 
       access_token:
         data.access_token,
@@ -284,7 +375,8 @@ export async function GET(
     };
 
     const {
-      error: databaseError,
+      error:
+        connectionError,
     } =
       await supabaseAdmin
         .from(
@@ -298,10 +390,12 @@ export async function GET(
           }
         );
 
-    if (databaseError) {
+    if (
+      connectionError
+    ) {
       console.error(
         "NOTION CONNECTION SAVE ERROR:",
-        databaseError
+        connectionError
       );
 
       return NextResponse.json(
@@ -315,26 +409,10 @@ export async function GET(
       );
     }
 
-    console.log(
-      "NOTION CONNECTION SAVED:",
-      {
-        workspaceId:
-          data.workspace_id,
-
-        workspaceName:
-          data.workspace_name,
-
-        hasAccessToken: true,
-
-        hasRefreshToken:
-          Boolean(
-            data.refresh_token
-          ),
-      }
-    );
-
     return NextResponse.json({
       success: true,
+
+      saved: true,
 
       workspace: {
         id:
@@ -349,10 +427,17 @@ export async function GET(
           null,
       },
 
-      saved: true,
+      user: {
+        id:
+          userData.user.id,
+
+        email:
+          userData.user.email ??
+          null,
+      },
 
       message:
-        "Notion connected and saved successfully.",
+        "Notion connected successfully.",
     });
   } catch (error) {
     console.error(
@@ -363,7 +448,7 @@ export async function GET(
     return NextResponse.json(
       {
         error:
-          "Failed to complete Notion OAuth.",
+          "Could not complete Notion OAuth.",
       },
       {
         status: 500,
