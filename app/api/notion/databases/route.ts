@@ -7,21 +7,50 @@ export async function GET(
   request: Request
 ) {
   try {
-    const url = new URL(request.url);
+    const authorization =
+      request.headers.get("authorization");
 
-    const workspaceId =
-      url.searchParams.get(
-        "workspaceId"
+    if (
+      !authorization ||
+      !authorization.startsWith("Bearer ")
+    ) {
+      return NextResponse.json(
+        {
+          error: "Authentication required.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    const accessToken =
+      authorization.slice("Bearer ".length);
+
+    const {
+      data: { user },
+      error: userError,
+    } =
+      await supabaseAdmin.auth.getUser(
+        accessToken
       );
 
-    if (!workspaceId) {
+    if (
+      userError ||
+      !user
+    ) {
+      console.error(
+        "SUPABASE USER VERIFY ERROR:",
+        userError
+      );
+
       return NextResponse.json(
         {
           error:
-            "workspaceId is required.",
+            "Your login session is invalid or expired.",
         },
         {
-          status: 400,
+          status: 401,
         }
       );
     }
@@ -31,22 +60,22 @@ export async function GET(
       error: connectionError,
     } =
       await supabaseAdmin
-        .from(
-          "notion_connections"
-        )
+        .from("notion_connections")
         .select(
-          "access_token, workspace_id, workspace_name, selected_data_source_id"
+          `
+            access_token,
+            workspace_id,
+            workspace_name,
+            selected_data_source_id
+          `
         )
         .eq(
-          "workspace_id",
-          workspaceId
+          "user_id",
+          user.id
         )
-        .single();
+        .maybeSingle();
 
-    if (
-      connectionError ||
-      !connection
-    ) {
+    if (connectionError) {
       console.error(
         "NOTION CONNECTION LOOKUP ERROR:",
         connectionError
@@ -55,12 +84,22 @@ export async function GET(
       return NextResponse.json(
         {
           error:
-            "Notion connection was not found.",
+            "Could not load your Notion connection.",
         },
         {
-          status: 404,
+          status: 500,
         }
       );
+    }
+
+    if (!connection) {
+      return NextResponse.json({
+        success: true,
+        connected: false,
+        workspace: null,
+        selectedDataSourceId: null,
+        dataSources: [],
+      });
     }
 
     const notion =
@@ -83,16 +122,12 @@ export async function GET(
         (item) => {
           const name =
             "title" in item &&
-            Array.isArray(
-              item.title
-            )
+            Array.isArray(item.title)
               ? item.title
-                  .map(
-                    (part) =>
-                      "plain_text" in
-                      part
-                        ? part.plain_text
-                        : ""
+                  .map((part) =>
+                    "plain_text" in part
+                      ? part.plain_text
+                      : ""
                   )
                   .join("")
               : "Untitled";
@@ -100,19 +135,18 @@ export async function GET(
           return {
             id: item.id,
             name:
-              name ||
-              "Untitled",
+              name || "Untitled",
           };
         }
       );
 
     return NextResponse.json({
       success: true,
+      connected: true,
 
       workspace: {
         id:
           connection.workspace_id,
-
         name:
           connection.workspace_name,
       },

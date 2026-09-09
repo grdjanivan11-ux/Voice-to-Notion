@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import AuthGate from "@/components/AuthGate";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 type StructuredNote = {
@@ -74,12 +75,6 @@ const HISTORY_STORAGE_KEY =
 
 const MAX_HISTORY_ITEMS = 10;
 
-/*
-  TEMPORARY:
-  Later this will come from the authenticated user.
-*/
-const CURRENT_WORKSPACE_ID =
-  "7ae2cf11-736f-814f-8155-00036e4e7b99";
 
 export default function Home() {
   const [transcript, setTranscript] =
@@ -1050,143 +1045,155 @@ export default function Home() {
   }
 
   async function saveToNotion() {
-    if (!note) {
-      setError(
-        "There is no structured note to save."
-      );
+  if (!note) {
+    setError(
+      "There is no structured note to save."
+    );
+
+    return;
+  }
+
+  if (!savedDataSourceId) {
+    setError(
+      "Choose and save a Notion destination first."
+    );
+
+    return;
+  }
+
+  setProcessingStep(
+    "saving"
+  );
+
+  setError("");
+
+  setNotionSaved(false);
+
+  setNotionPageUrl(
+    null
+  );
+
+  try {
+    const {
+      data: { session },
+    } =
+      await supabaseBrowser.auth.getSession();
+
+    if (!session) {
+      window.location.href =
+        "/login";
 
       return;
     }
 
-    if (!savedDataSourceId) {
-      setError(
-        "Choose and save a Notion destination first."
+    const response =
+      await fetch(
+        "/api/notion/save",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${session.access_token}`,
+          },
+
+          body:
+            JSON.stringify(
+              {
+                title:
+                  note.title,
+
+                summary:
+                  note.summary,
+
+                actionItems:
+                  note.actionItems,
+
+                category:
+                  note.category,
+
+                dueDate:
+                  note.dueDate,
+
+                transcript,
+              }
+            ),
+        }
       );
 
-      return;
+    const data =
+      (await response.json()) as NotionSaveResponse;
+
+    if (!response.ok) {
+      throw new Error(
+        data.details ||
+          data.error ||
+          "Could not save the note to Notion."
+      );
+    }
+
+    setNotionSaved(true);
+
+    if (data.url) {
+      setNotionPageUrl(
+        data.url
+      );
+    }
+
+    if (
+      currentHistoryIdRef.current
+    ) {
+      updateHistoryItem(
+        currentHistoryIdRef.current,
+        {
+          savedToNotion:
+            true,
+
+          notionUrl:
+            data.url ??
+            null,
+
+          note,
+
+          transcript,
+        }
+      );
     }
 
     setProcessingStep(
-      "saving"
+      "ready"
     );
 
-    setError("");
-
-    setNotionSaved(false);
-
-    setNotionPageUrl(
-      null
+    console.log(
+      "NOTION SAVE SUCCESS:",
+      data
+    );
+  } catch (err) {
+    console.error(
+      "SAVE TO NOTION ERROR:",
+      err
     );
 
-    try {
-      const response =
-        await fetch(
-          "/api/notion/save",
-          {
-            method: "POST",
+    setProcessingStep(
+      "ready"
+    );
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify(
-                {
-                  title:
-                    note.title,
-
-                  summary:
-                    note.summary,
-
-                  actionItems:
-                    note.actionItems,
-
-                  category:
-                    note.category,
-
-                  dueDate:
-                    note.dueDate,
-
-                  transcript,
-
-                  workspaceId:
-                    CURRENT_WORKSPACE_ID,
-                }
-              ),
-          }
-        );
-
-      const data =
-        (await response.json()) as NotionSaveResponse;
-
-      if (!response.ok) {
-        throw new Error(
-          data.details ||
-            data.error ||
-            "Could not save the note to Notion."
-        );
-      }
-
-      setNotionSaved(true);
-
-      if (data.url) {
-        setNotionPageUrl(
-          data.url
-        );
-      }
-
-      if (
-        currentHistoryIdRef.current
-      ) {
-        updateHistoryItem(
-          currentHistoryIdRef.current,
-          {
-            savedToNotion:
-              true,
-
-            notionUrl:
-              data.url ??
-              null,
-
-            note,
-
-            transcript,
-          }
-        );
-      }
-
-      setProcessingStep(
-        "ready"
+    if (
+      err instanceof Error
+    ) {
+      setError(
+        err.message
       );
-
-      console.log(
-        "NOTION SAVE SUCCESS:",
-        data
+    } else {
+      setError(
+        "Could not save the note to Notion."
       );
-    } catch (err) {
-      console.error(
-        "SAVE TO NOTION ERROR:",
-        err
-      );
-
-      setProcessingStep(
-        "ready"
-      );
-
-      if (
-        err instanceof Error
-      ) {
-        setError(
-          err.message
-        );
-      } else {
-        setError(
-          "Could not save the note to Notion."
-        );
-      }
     }
   }
+}
 
   function updateNote(
     changes: Partial<StructuredNote>
@@ -1452,6 +1459,7 @@ export default function Home() {
     savedDataSourceId;
 
   return (
+  <AuthGate>
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="mx-auto max-w-4xl px-6 py-16">
         <header className="mb-12">
@@ -2281,7 +2289,8 @@ export default function Home() {
             </div>
           )}
         </section>
-      </div>
+            </div>
     </main>
-  );
+  </AuthGate>
+);
 }

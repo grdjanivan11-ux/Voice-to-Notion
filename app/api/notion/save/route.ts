@@ -10,13 +10,75 @@ type SaveNoteRequest = {
   category: string;
   dueDate: string | null;
   transcript: string;
-  workspaceId: string;
 };
 
 export async function POST(
   request: Request
 ) {
   try {
+    /*
+      AUTHENTICATE SUPABASE USER
+    */
+
+    const authorization =
+      request.headers.get(
+        "authorization"
+      );
+
+    if (
+      !authorization ||
+      !authorization.startsWith(
+        "Bearer "
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Authentication required.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    const accessToken =
+      authorization.slice(
+        "Bearer ".length
+      );
+
+    const {
+      data: { user },
+      error: userError,
+    } =
+      await supabaseAdmin.auth.getUser(
+        accessToken
+      );
+
+    if (
+      userError ||
+      !user
+    ) {
+      console.error(
+        "SUPABASE USER VERIFY ERROR:",
+        userError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Your login session is invalid or expired.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    /*
+      READ NOTE DATA
+    */
+
     const body =
       (await request.json()) as SaveNoteRequest;
 
@@ -27,28 +89,7 @@ export async function POST(
       category,
       dueDate,
       transcript,
-      workspaceId,
     } = body;
-
-    /*
-      BASIC VALIDATION
-    */
-
-    if (
-      !workspaceId ||
-      typeof workspaceId !==
-        "string"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "workspaceId is required.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
 
     if (
       !title ||
@@ -83,14 +124,12 @@ export async function POST(
     }
 
     /*
-      LOAD USER'S NOTION CONNECTION
-      FROM SUPABASE
+      LOAD THIS USER'S NOTION CONNECTION
     */
 
     const {
       data: connection,
-      error:
-        connectionError,
+      error: connectionError,
     } =
       await supabaseAdmin
         .from(
@@ -105,14 +144,13 @@ export async function POST(
           `
         )
         .eq(
-          "workspace_id",
-          workspaceId
+          "user_id",
+          user.id
         )
-        .single();
+        .maybeSingle();
 
     if (
-      connectionError ||
-      !connection
+      connectionError
     ) {
       console.error(
         "NOTION CONNECTION LOOKUP ERROR:",
@@ -122,18 +160,25 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "No Notion connection was found for this workspace.",
+            "Could not load your Notion connection.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (!connection) {
+      return NextResponse.json(
+        {
+          error:
+            "No Notion connection was found for this account.",
         },
         {
           status: 404,
         }
       );
     }
-
-    /*
-      MAKE SURE USER SELECTED
-      A DESTINATION DATABASE
-    */
 
     if (
       !connection.selected_data_source_id
@@ -150,8 +195,8 @@ export async function POST(
     }
 
     /*
-      CREATE NOTION CLIENT USING
-      THE USER'S OAUTH TOKEN
+      CREATE NOTION CLIENT
+      USING USER'S OAUTH TOKEN
     */
 
     const notion =
@@ -159,10 +204,6 @@ export async function POST(
         auth:
           connection.access_token,
       });
-
-    /*
-      CLEAN ACTION ITEMS
-    */
 
     const cleanActionItems =
       actionItems
@@ -175,7 +216,7 @@ export async function POST(
         .filter(Boolean);
 
     /*
-      CREATE NOTION PAGE
+      CREATE PAGE
     */
 
     const page =
@@ -237,10 +278,6 @@ export async function POST(
         },
 
         children: [
-          /*
-            SUMMARY
-          */
-
           {
             object:
               "block",
@@ -288,10 +325,6 @@ export async function POST(
               ],
             },
           },
-
-          /*
-            ACTION ITEMS
-          */
 
           {
             object:
@@ -345,10 +378,6 @@ export async function POST(
             })
           ),
 
-          /*
-            ORIGINAL TRANSCRIPT
-          */
-
           {
             object:
               "block",
@@ -398,10 +427,6 @@ export async function POST(
           },
         ],
       });
-
-    /*
-      SUCCESS
-    */
 
     return NextResponse.json({
       success: true,

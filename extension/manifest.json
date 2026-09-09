@@ -10,10 +10,12 @@
   },
 
   "permissions": [
-    "tabs"
+    "tabs",
+    "storage"
   ],
 
   "host_permissions": [
-  "https://voice-to-notion-omega.vercel.app/*"
-]
+    "https://voice-to-notion-omega.vercel.app/*",
+    "https://lxsveftgcjofmoloplwt.supabase.co/*"
+  ]
 }
