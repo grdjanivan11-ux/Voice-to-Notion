@@ -23,9 +23,9 @@
 
   <main class="app-shell">
 
-    <!-- =========================================
+    <!-- ==================================================
          TOP HUD
-    ========================================== -->
+    =================================================== -->
 
     <header class="top-hud">
 
@@ -49,7 +49,7 @@
             ></span>
 
             <span id="systemLabel">
-              System ready
+              System Ready
             </span>
 
           </div>
@@ -67,29 +67,28 @@
           aria-label="Switch theme"
           title="Switch theme"
         >
+
           <span class="theme-icon">
             ☾
           </span>
 
           <span class="theme-switch">
-            <span
-              id="themeThumb"
-              class="theme-thumb"
-            ></span>
+            <span class="theme-thumb"></span>
           </span>
 
           <span class="theme-icon">
             ☀
           </span>
+
         </button>
 
       </div>
 
     </header>
 
-    <!-- =========================================
+    <!-- ==================================================
          ACCOUNT
-    ========================================== -->
+    =================================================== -->
 
     <section
       id="accountCard"
@@ -97,7 +96,7 @@
     >
 
       <div class="panel-kicker">
-        Account
+        Account Access
       </div>
 
       <div
@@ -112,7 +111,7 @@
           </h1>
 
           <p>
-            Sign in to your Voice to Notion workspace.
+            Sign in to continue capturing and syncing your thoughts.
           </p>
 
         </div>
@@ -128,7 +127,7 @@
         <div class="field">
 
           <label for="authEmail">
-            Email
+            Email address
           </label>
 
           <input
@@ -174,11 +173,9 @@
         <div class="profile-block">
 
           <div class="profile-avatar">
-
             <span id="profileInitial">
               V
             </span>
-
           </div>
 
           <div class="profile-copy">
@@ -214,18 +211,18 @@
 
     </section>
 
-    <!-- =========================================
-         MAIN APP
-    ========================================== -->
+    <!-- ==================================================
+         APP
+    =================================================== -->
 
     <div
       id="appContent"
       hidden
     >
 
-      <!-- =======================================
+      <!-- ================================================
            VOICE CORE
-      ======================================== -->
+      ================================================= -->
 
       <section
         id="voiceCard"
@@ -241,7 +238,7 @@
             </span>
 
             <h2>
-              Capture instantly.
+              Capture
             </h2>
 
           </div>
@@ -327,7 +324,7 @@
             id="voiceSubstatus"
             class="voice-substatus"
           >
-            Your thought becomes a structured Notion note automatically.
+            Speak naturally. AI structures your thought and sends it directly to Notion.
           </p>
 
           <div
@@ -378,9 +375,9 @@
 
       </section>
 
-      <!-- =======================================
+      <!-- ================================================
            NOTION DESTINATION
-      ======================================== -->
+      ================================================= -->
 
       <section
         id="notionDestinationCard"
@@ -392,7 +389,7 @@
           <div>
 
             <span class="panel-kicker">
-              Destination
+              Notion Destination
             </span>
 
             <h2>
@@ -455,7 +452,7 @@
             >
 
               <option value="">
-                Choose a database...
+                Select database...
               </option>
 
             </select>
@@ -469,7 +466,7 @@
               class="button button-primary"
               type="button"
             >
-              Save Destination
+              Sync Destination
             </button>
 
             <button
@@ -477,6 +474,7 @@
               class="button button-secondary small-button"
               type="button"
               title="Refresh databases"
+              aria-label="Refresh Notion databases"
             >
               ↻
             </button>
@@ -493,9 +491,9 @@
 
       </section>
 
-      <!-- =======================================
-           LIVE TRANSCRIPT
-      ======================================== -->
+      <!-- ================================================
+           TRANSCRIPT
+      ================================================= -->
 
       <section
         id="resultSection"
@@ -556,20 +554,18 @@
           class="button button-secondary full-button"
           type="button"
         >
-
           <span>
             ✦
           </span>
 
-          Re-structure with AI
-
+          Structure with AI
         </button>
 
       </section>
 
-      <!-- =======================================
-           STRUCTURED NOTE
-      ======================================== -->
+      <!-- ================================================
+           AI NOTE
+      ================================================= -->
 
       <section
         id="structuredSection"
@@ -590,7 +586,7 @@
             </h2>
 
             <p class="section-description">
-              Review your generated note before syncing.
+              Review your structured capture before syncing.
             </p>
 
           </div>
@@ -603,8 +599,6 @@
           </span>
 
         </div>
-
-        <!-- TITLE -->
 
         <div class="field">
 
@@ -619,8 +613,6 @@
 
         </div>
 
-        <!-- SUMMARY -->
-
         <div class="field">
 
           <label for="summary">
@@ -634,9 +626,7 @@
 
         </div>
 
-        <!-- =====================================
-             SMART METADATA
-        ====================================== -->
+        <!-- SMART METADATA -->
 
         <div class="metadata-grid metadata-grid-three">
 
@@ -692,9 +682,7 @@
 
         </div>
 
-        <!-- =====================================
-             ACTION ITEMS
-        ====================================== -->
+        <!-- ACTION ITEMS -->
 
         <div class="task-module">
 
@@ -729,9 +717,7 @@
 
         </div>
 
-        <!-- =====================================
-             NOTION SAVE
-        ====================================== -->
+        <!-- NOTION SAVE -->
 
         <div class="save-section">
 
@@ -740,13 +726,11 @@
             class="button button-primary save-button"
             type="button"
           >
-
             Send to Notion
 
             <span>
               →
             </span>
-
           </button>
 
           <div
@@ -766,7 +750,7 @@
               </strong>
 
               <span>
-                Your note is now in Notion.
+                Your structured note is now in Notion.
               </span>
 
             </div>
@@ -781,22 +765,20 @@
             rel="noreferrer"
             hidden
           >
-
-            Open Notion page
+            Open in Notion
 
             <span>
               ↗
             </span>
-
           </a>
 
         </div>
 
       </section>
 
-      <!-- =======================================
+      <!-- ================================================
            ERROR
-      ======================================== -->
+      ================================================= -->
 
       <div
         id="errorBox"
@@ -804,9 +786,9 @@
         hidden
       ></div>
 
-      <!-- =======================================
+      <!-- ================================================
            FOOTER
-      ======================================== -->
+      ================================================= -->
 
       <footer class="footer">
 

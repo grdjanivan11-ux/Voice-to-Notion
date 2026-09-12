@@ -180,10 +180,6 @@ body {
     color 250ms ease;
 }
 
-/* =========================================================
-   FUTURISTIC GRID
-   ========================================================= */
-
 body::before {
   content: "";
 
@@ -212,20 +208,12 @@ body::before {
     48px 48px;
 }
 
-/* =========================================================
-   SELECTION
-   ========================================================= */
-
 ::selection {
   background:
     rgba(139, 92, 246, 0.3);
 
   color: inherit;
 }
-
-/* =========================================================
-   FORM RESET
-   ========================================================= */
 
 button,
 input,
@@ -302,7 +290,7 @@ select {
 }
 
 /* =========================================================
-   AMBIENT BACKGROUND
+   AMBIENT
    ========================================================= */
 
 .vtn-orb {
@@ -347,7 +335,7 @@ select {
 }
 
 /* =========================================================
-   GLASS SURFACE
+   GLASS
    ========================================================= */
 
 .vtn-glass {
@@ -413,7 +401,8 @@ select {
     );
 }
 
-[data-theme="light"] .vtn-card::before {
+[data-theme="light"]
+.vtn-card::before {
   background:
     linear-gradient(
       135deg,
@@ -709,7 +698,7 @@ textarea.vtn-input {
 }
 
 /* =========================================================
-   STATUS COMPONENTS
+   STATUS
    ========================================================= */
 
 .vtn-success {
@@ -907,7 +896,7 @@ textarea.vtn-input {
 }
 
 /* =========================================================
-   RECORDING VISUAL
+   RECORDING
    ========================================================= */
 
 .vtn-record-orb {
@@ -962,11 +951,8 @@ textarea.vtn-input {
     rgba(139, 92, 246, 0.38);
 }
 
-/* =========================================================
-   RECORDING STATE
-   ========================================================= */
-
-.vtn-recording .vtn-record-orb {
+.vtn-recording
+.vtn-record-orb {
   border-color:
     rgba(251, 113, 133, 0.5);
 
@@ -975,7 +961,8 @@ textarea.vtn-input {
     rgba(251, 113, 133, 0.18);
 }
 
-.vtn-recording .vtn-record-core {
+.vtn-recording
+.vtn-record-core {
   background:
     linear-gradient(
       135deg,
@@ -989,26 +976,19 @@ textarea.vtn-input {
 }
 
 /* =========================================================
-   DIVIDER
+   DIVIDER / ICON BUTTON
    ========================================================= */
 
 .vtn-divider {
-  width:
-    100%;
+  width: 100%;
 
-  height:
-    1px;
+  height: 1px;
 
-  border:
-    0;
+  border: 0;
 
   background:
     var(--border);
 }
-
-/* =========================================================
-   ICON BUTTON
-   ========================================================= */
 
 .vtn-icon-button {
   display:
@@ -1020,14 +1000,10 @@ textarea.vtn-input {
   justify-content:
     center;
 
-  width:
-    38px;
+  width: 38px;
+  height: 38px;
 
-  height:
-    38px;
-
-  padding:
-    0;
+  padding: 0;
 
   border:
     1px solid
@@ -1044,26 +1020,6 @@ textarea.vtn-input {
 
   cursor:
     pointer;
-
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-
-.vtn-icon-button:hover {
-  transform:
-    translateY(-1px);
-
-  border-color:
-    var(--border-strong);
-
-  color:
-    var(--foreground);
-
-  background:
-    rgba(128, 128, 145, 0.08);
 }
 
 /* =========================================================
@@ -1149,7 +1105,7 @@ textarea.vtn-input {
 }
 
 /* =========================================================
-   MOBILE
+   BASE MOBILE
    ========================================================= */
 
 @media (max-width: 640px) {
@@ -1214,19 +1170,18 @@ textarea.vtn-input {
 }
 
 /* =========================================================
-   C8.2 — FUTURISTIC HUD WORKSPACE
+   C8.2 — FUTURISTIC HUD
    ========================================================= */
 
-/* =========================
-   WAVEFORM
-   ========================= */
-
 .vtn-waveform {
-  display: flex;
+  display:
+    flex;
 
-  align-items: center;
+  align-items:
+    center;
 
-  justify-content: center;
+  justify-content:
+    center;
 
   gap: 4px;
 
@@ -1234,13 +1189,15 @@ textarea.vtn-input {
 }
 
 .vtn-waveform span {
-  display: block;
+  display:
+    block;
 
   width: 3px;
 
   height: 8px;
 
-  border-radius: 999px;
+  border-radius:
+    999px;
 
   background:
     linear-gradient(
@@ -1265,17 +1222,20 @@ textarea.vtn-input {
     infinite alternate;
 }
 
-.vtn-waveform.is-active span:nth-child(2n) {
+.vtn-waveform.is-active
+span:nth-child(2n) {
   animation-duration:
     0.65s;
 }
 
-.vtn-waveform.is-active span:nth-child(3n) {
+.vtn-waveform.is-active
+span:nth-child(3n) {
   animation-duration:
     1.05s;
 }
 
-.vtn-waveform.is-active span:nth-child(4n) {
+.vtn-waveform.is-active
+span:nth-child(4n) {
   animation-duration:
     0.78s;
 }
@@ -1294,26 +1254,27 @@ textarea.vtn-input {
   }
 }
 
-/* =========================
-   AI STATUS
-   ========================= */
-
 .vtn-ai-state {
-  display: flex;
+  display:
+    flex;
 
-  align-items: center;
+  align-items:
+    center;
 
-  justify-content: center;
+  justify-content:
+    center;
 
   gap: 8px;
 
-  padding: 11px 13px;
+  padding:
+    11px 13px;
 
   border:
     1px solid
     rgba(139, 92, 246, 0.2);
 
-  border-radius: 14px;
+  border-radius:
+    14px;
 
   background:
     rgba(139, 92, 246, 0.08);
@@ -1321,86 +1282,19 @@ textarea.vtn-input {
   color:
     var(--violet-soft);
 
-  font-size: 11px;
+  font-size:
+    11px;
 
-  font-weight: 700;
-
-  letter-spacing:
-    0.02em;
-
-  overflow: hidden;
-
-  position: relative;
+  font-weight:
+    700;
 }
-
-.vtn-ai-state::after {
-  content: "";
-
-  position: absolute;
-
-  top: 0;
-  bottom: 0;
-
-  left: -40%;
-
-  width: 30%;
-
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.12),
-      transparent
-    );
-
-  animation:
-    vtn-ai-scan
-    1.5s linear
-    infinite;
-}
-
-.vtn-ai-spark {
-  animation:
-    vtn-spark
-    1.2s ease-in-out
-    infinite;
-}
-
-@keyframes vtn-ai-scan {
-  from {
-    left: -40%;
-  }
-
-  to {
-    left: 120%;
-  }
-}
-
-@keyframes vtn-spark {
-  0%,
-  100% {
-    opacity: 0.45;
-
-    transform:
-      scale(0.9);
-  }
-
-  50% {
-    opacity: 1;
-
-    transform:
-      scale(1.15);
-  }
-}
-
-/* =========================
-   LIVE TRANSCRIPT
-   ========================= */
 
 .vtn-transcript-shell {
-  position: relative;
+  position:
+    relative;
 
-  overflow: hidden;
+  overflow:
+    hidden;
 
   border:
     1px solid
@@ -1411,117 +1305,63 @@ textarea.vtn-input {
 
   background:
     var(--input-bg);
-
-  transition:
-    border-color 200ms ease,
-    box-shadow 200ms ease;
 }
-
-.vtn-transcript-shell:focus-within {
-  border-color:
-    rgba(139, 92, 246, 0.55);
-
-  box-shadow:
-    0 0 0 3px
-    rgba(139, 92, 246, 0.08);
-}
-
-.vtn-transcript-shell.is-processing {
-  border-color:
-    rgba(139, 92, 246, 0.35);
-
-  box-shadow:
-    0 0 24px
-    rgba(139, 92, 246, 0.08);
-}
-
-.vtn-transcript-shell.is-processing::after {
-  content: "";
-
-  position: absolute;
-
-  left: 0;
-  right: 0;
-  bottom: 0;
-
-  height: 2px;
-
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      var(--violet),
-      var(--cyan),
-      transparent
-    );
-
-  animation:
-    vtn-processing-line
-    1.4s ease-in-out
-    infinite;
-}
-
-@keyframes vtn-processing-line {
-  0%,
-  100% {
-    opacity: 0.2;
-
-    transform:
-      translateX(-40%);
-  }
-
-  50% {
-    opacity: 1;
-
-    transform:
-      translateX(40%);
-  }
-}
-
-/* =========================
-   EMPTY AI STATE
-   ========================= */
 
 .vtn-empty-ai {
-  display: flex;
+  display:
+    flex;
 
-  min-height: 280px;
+  min-height:
+    280px;
 
-  flex-direction: column;
+  flex-direction:
+    column;
 
-  align-items: center;
+  align-items:
+    center;
 
-  justify-content: center;
+  justify-content:
+    center;
 
   border:
     1px dashed
     var(--border);
 
-  border-radius: 18px;
+  border-radius:
+    18px;
 
   background:
     var(--surface-soft);
 
-  padding: 32px;
+  padding:
+    32px;
 
-  text-align: center;
+  text-align:
+    center;
 }
 
 .vtn-empty-ai-icon {
-  display: flex;
+  display:
+    flex;
 
-  width: 52px;
-  height: 52px;
+  width:
+    52px;
 
-  align-items: center;
+  height:
+    52px;
 
-  justify-content: center;
+  align-items:
+    center;
+
+  justify-content:
+    center;
 
   border:
     1px solid
     rgba(139, 92, 246, 0.18);
 
-  border-radius: 16px;
+  border-radius:
+    16px;
 
   background:
     rgba(139, 92, 246, 0.08);
@@ -1529,37 +1369,16 @@ textarea.vtn-input {
   color:
     var(--violet-soft);
 
-  font-size: 20px;
+  font-size:
+    20px;
 
   box-shadow:
     0 0 28px
     rgba(139, 92, 246, 0.08);
-
-  animation:
-    vtn-empty-float
-    3.5s ease-in-out
-    infinite;
-}
-
-@keyframes vtn-empty-float {
-  0%,
-  100% {
-    transform:
-      translateY(0);
-  }
-
-  50% {
-    transform:
-      translateY(-5px);
-  }
 }
 
 /* =========================================================
-   C8.3.5 — PREMIUM MOBILE EXPERIENCE
-   ========================================================= */
-
-/* =========================================================
-   MOBILE HUD
+   C8.3.5 — PREMIUM MOBILE
    ========================================================= */
 
 .vtn-mobile-hud {
@@ -1569,50 +1388,61 @@ textarea.vtn-input {
 }
 
 .vtn-mobile-logout {
-  display: flex;
+  display:
+    flex;
 
-  width: 40px;
-  height: 40px;
+  width:
+    40px;
 
-  align-items: center;
-  justify-content: center;
+  height:
+    40px;
 
-  padding: 0;
+  align-items:
+    center;
 
-  font-size: 14px;
+  justify-content:
+    center;
+
+  padding:
+    0;
+
+  font-size:
+    14px;
 }
 
-/* =========================================================
-   MOBILE HERO
-   ========================================================= */
-
 .vtn-mobile-hero {
-  position: relative;
+  position:
+    relative;
 
-  z-index: 1;
+  z-index:
+    1;
 
   padding:
     10px 16px 4px;
 }
 
-/* =========================================================
-   MOBILE VOICE CORE
-   ========================================================= */
-
 .vtn-mobile-voice-card {
-  position: relative;
+  position:
+    relative;
 }
 
 .vtn-mobile-voice-card::after {
   content: "";
 
-  position: absolute;
+  position:
+    absolute;
 
-  top: 30%;
-  left: 50%;
+  top:
+    30%;
 
-  width: 190px;
-  height: 190px;
+  left:
+    50%;
+
+  width:
+    190px;
+
+  height:
+    190px;
 
   transform:
     translate(-50%, -50%);
@@ -1659,19 +1489,11 @@ textarea.vtn-input {
     rgba(59, 130, 246, 0.12);
 }
 
-/* =========================================================
-   MOBILE DESTINATION
-   ========================================================= */
-
 .vtn-mobile-destination {
   transition:
     border-color 180ms ease,
     transform 180ms ease;
 }
-
-/* =========================================================
-   MOBILE WORKSPACE TABS
-   ========================================================= */
 
 .vtn-mobile-tabs {
   display:
@@ -1724,14 +1546,10 @@ textarea.vtn-input {
 
   cursor:
     pointer;
-
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
 }
 
-.vtn-mobile-tabs button.is-active {
+.vtn-mobile-tabs
+button.is-active {
   background:
     var(--surface-strong);
 
@@ -1770,19 +1588,11 @@ textarea.vtn-input {
     var(--success);
 }
 
-/* =========================================================
-   MOBILE TRANSCRIPT
-   ========================================================= */
-
 .vtn-mobile-transcript {
   transition:
     min-height 180ms ease,
     border-color 160ms ease;
 }
-
-/* =========================================================
-   MOBILE SMART METADATA
-   ========================================================= */
 
 .vtn-mobile-metadata-grid {
   grid-template-columns:
@@ -1791,10 +1601,6 @@ textarea.vtn-input {
       minmax(0, 1fr)
     );
 }
-
-/* =========================================================
-   PRIORITY PILLS
-   ========================================================= */
 
 .vtn-priority-pill {
   display:
@@ -1865,10 +1671,6 @@ textarea.vtn-input {
     var(--success);
 }
 
-/* =========================================================
-   MOBILE HISTORY
-   ========================================================= */
-
 .vtn-mobile-history-row {
   display:
     flex;
@@ -1907,10 +1709,6 @@ textarea.vtn-input {
   scroll-snap-align:
     start;
 }
-
-/* =========================================================
-   MOBILE STICKY SAVE ACTION
-   ========================================================= */
 
 .vtn-mobile-bottom-action {
   position:
@@ -1992,10 +1790,6 @@ textarea.vtn-input {
     auto;
 }
 
-/* =========================================================
-   SAFE AREA SUPPORT
-   ========================================================= */
-
 @supports (
   padding:
     env(
@@ -2009,10 +1803,6 @@ textarea.vtn-input {
       );
   }
 }
-
-/* =========================================================
-   MOBILE BREAKPOINT
-   ========================================================= */
 
 @media (
   max-width: 767px
@@ -2195,10 +1985,6 @@ textarea.vtn-input {
   }
 }
 
-/* =========================================================
-   VERY SMALL PHONES
-   ========================================================= */
-
 @media (
   max-width: 390px
 ) {
@@ -2237,10 +2023,6 @@ textarea.vtn-input {
   }
 }
 
-/* =========================================================
-   DESKTOP RESET
-   ========================================================= */
-
 @media (
   min-width: 768px
 ) {
@@ -2261,5 +2043,397 @@ textarea.vtn-input {
 
     width:
       auto;
+  }
+}
+
+/* =========================================================
+   C8.4 — FINAL CONSISTENCY
+   ========================================================= */
+
+.vtn-brand-mark {
+  display:
+    flex;
+
+  width:
+    40px;
+
+  height:
+    40px;
+
+  flex:
+    0 0 auto;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.14);
+
+  border-radius:
+    13px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #8b5cf6,
+      #6366f1 52%,
+      #3b82f6
+    );
+
+  color:
+    #ffffff;
+
+  font-size:
+    14px;
+
+  font-weight:
+    900;
+
+  box-shadow:
+    0 0 30px
+    rgba(139, 92, 246, 0.24);
+}
+
+.vtn-auth-grid {
+  position:
+    fixed;
+
+  inset:
+    0;
+
+  z-index:
+    0;
+
+  pointer-events:
+    none;
+
+  opacity:
+    0.2;
+
+  background-image:
+    linear-gradient(
+      var(--grid-color) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      var(--grid-color) 1px,
+      transparent 1px
+    );
+
+  background-size:
+    42px 42px;
+}
+
+.vtn-auth-feature {
+  border-radius:
+    18px;
+
+  box-shadow:
+    0 12px 40px
+    rgba(0, 0, 0, 0.12);
+}
+
+.vtn-auth-feature:hover {
+  transform:
+    translateX(3px);
+
+  border-color:
+    rgba(139, 92, 246, 0.2);
+}
+
+[data-theme="light"]
+.vtn-auth-feature {
+  box-shadow:
+    0 12px 35px
+    rgba(50, 55, 90, 0.06);
+}
+
+.vtn-auth-card {
+  border-color:
+    rgba(139, 92, 246, 0.12);
+}
+
+.vtn-auth-card::after {
+  content: "";
+
+  position:
+    absolute;
+
+  top:
+    -100px;
+
+  right:
+    -100px;
+
+  width:
+    220px;
+
+  height:
+    220px;
+
+  border-radius:
+    999px;
+
+  pointer-events:
+    none;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(139, 92, 246, 0.1),
+      transparent 70%
+    );
+
+  filter:
+    blur(20px);
+}
+
+.vtn-auth-mode {
+  min-height:
+    44px;
+
+  border:
+    0;
+
+  border-radius:
+    12px;
+
+  background:
+    transparent;
+
+  color:
+    var(--muted);
+
+  font-size:
+    13px;
+
+  font-weight:
+    700;
+
+  cursor:
+    pointer;
+
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.vtn-auth-mode:hover:not(:disabled) {
+  color:
+    var(--foreground);
+}
+
+.vtn-auth-mode.is-active {
+  background:
+    var(--surface-strong);
+
+  color:
+    var(--foreground);
+
+  box-shadow:
+    0 6px 18px
+    rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"]
+.vtn-auth-mode.is-active {
+  box-shadow:
+    0 6px 18px
+    rgba(50, 55, 90, 0.08);
+}
+
+.vtn-auth-mode:disabled {
+  cursor:
+    not-allowed;
+
+  opacity:
+    0.55;
+}
+
+.vtn-feedback-card {
+  display:
+    flex;
+
+  align-items:
+    flex-start;
+
+  gap:
+    11px;
+
+  padding:
+    13px;
+
+  border-radius:
+    14px;
+}
+
+.vtn-feedback-icon {
+  display:
+    flex;
+
+  width:
+    28px;
+
+  height:
+    28px;
+
+  flex:
+    0 0 auto;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border:
+    1px solid
+    currentColor;
+
+  border-radius:
+    999px;
+
+  font-size:
+    10px;
+
+  font-weight:
+    900;
+
+  opacity:
+    0.85;
+}
+
+.vtn-spinner {
+  display:
+    inline-block;
+
+  width:
+    15px;
+
+  height:
+    15px;
+
+  border:
+    2px solid
+    rgba(255, 255, 255, 0.3);
+
+  border-top-color:
+    #ffffff;
+
+  border-radius:
+    999px;
+
+  animation:
+    vtn-spin
+    0.7s linear
+    infinite;
+}
+
+@keyframes vtn-spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+.vtn-footer-dot {
+  width:
+    4px;
+
+  height:
+    4px;
+
+  border-radius:
+    999px;
+
+  background:
+    var(--violet);
+
+  box-shadow:
+    0 0 10px
+    rgba(139, 92, 246, 0.6);
+}
+
+.vtn-primary,
+.vtn-secondary,
+.vtn-input,
+.vtn-card,
+.vtn-glass,
+.vtn-theme-toggle {
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+.vtn-primary:focus-visible,
+.vtn-secondary:focus-visible,
+.vtn-auth-mode:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline:
+    2px solid
+    var(--violet);
+
+  outline-offset:
+    3px;
+}
+
+.vtn-primary:disabled,
+.vtn-secondary:disabled {
+  filter:
+    saturate(0.55);
+
+  box-shadow:
+    none;
+}
+
+@media (
+  max-width: 767px
+) {
+  .vtn-auth-card {
+    border-radius:
+      22px;
+  }
+
+  .vtn-auth-grid {
+    opacity:
+      0.14;
+
+    background-size:
+      36px 36px;
+  }
+
+  .vtn-brand-mark {
+    width:
+      38px;
+
+    height:
+      38px;
+
+    border-radius:
+      12px;
+  }
+
+  .vtn-feedback-card {
+    padding:
+      12px;
+  }
+}
+
+@media (
+  max-width: 390px
+) {
+  .vtn-auth-mode {
+    min-height:
+      42px;
+
+    font-size:
+      12px;
   }
 }

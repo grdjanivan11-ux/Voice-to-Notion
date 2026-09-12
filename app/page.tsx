@@ -87,13 +87,19 @@ type NotionDatabaseSelectionResponse = {
 const HISTORY_STORAGE_KEY =
   "voice-to-notion-history";
 
-const MAX_HISTORY_ITEMS = 10;
+const MAX_HISTORY_ITEMS =
+  10;
 
 export default function Home() {
-  const [transcript, setTranscript] =
-    useState("");
+  const [
+    transcript,
+    setTranscript,
+  ] = useState("");
 
-  const [note, setNote] =
+  const [
+    note,
+    setNote,
+  ] =
     useState<StructuredNote | null>(
       null
     );
@@ -114,13 +120,16 @@ export default function Home() {
       "transcript"
     );
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   const [
     isRecording,
     setIsRecording,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     audioBlob,
@@ -141,12 +150,14 @@ export default function Home() {
   const [
     recordingSeconds,
     setRecordingSeconds,
-  ] = useState(0);
+  ] =
+    useState(0);
 
   const [
     notionSaved,
     setNotionSaved,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     notionPageUrl,
@@ -167,17 +178,20 @@ export default function Home() {
   const [
     historyLoaded,
     setHistoryLoaded,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     accountEmail,
     setAccountEmail,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     signingOut,
     setSigningOut,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     notionWorkspaceName,
@@ -198,32 +212,38 @@ export default function Home() {
   const [
     selectedDataSourceId,
     setSelectedDataSourceId,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     savedDataSourceId,
     setSavedDataSourceId,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     loadingDatabases,
     setLoadingDatabases,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     savingDatabase,
     setSavingDatabase,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [
     notionDatabaseError,
     setNotionDatabaseError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     notionDatabaseMessage,
     setNotionDatabaseMessage,
-  ] = useState("");
+  ] =
+    useState("");
 
   const mediaRecorderRef =
     useRef<MediaRecorder | null>(
@@ -257,16 +277,16 @@ export default function Home() {
     selectedDataSourceId !==
     savedDataSourceId;
 
-  /*
-    ========================================================
-    LOAD ACCOUNT
-    ========================================================
-  */
+  /* =========================================================
+     AUTH
+     ========================================================= */
 
   useEffect(() => {
     async function loadAccount() {
       const {
-        data: { session },
+        data: {
+          session,
+        },
       } =
         await supabaseBrowser.auth.getSession();
 
@@ -279,11 +299,9 @@ export default function Home() {
     loadAccount();
   }, []);
 
-  /*
-    ========================================================
-    LOAD HISTORY
-    ========================================================
-  */
+  /* =========================================================
+     HISTORY
+     ========================================================= */
 
   useEffect(() => {
     try {
@@ -292,7 +310,9 @@ export default function Home() {
           HISTORY_STORAGE_KEY
         );
 
-      if (storedHistory) {
+      if (
+        storedHistory
+      ) {
         const parsedHistory =
           JSON.parse(
             storedHistory
@@ -330,12 +350,6 @@ export default function Home() {
     }
   }, []);
 
-  /*
-    ========================================================
-    SAVE HISTORY
-    ========================================================
-  */
-
   useEffect(() => {
     if (
       !historyLoaded
@@ -361,21 +375,17 @@ export default function Home() {
     historyLoaded,
   ]);
 
-  /*
-    ========================================================
-    LOAD NOTION DATABASES
-    ========================================================
-  */
+  /* =========================================================
+     NOTION
+     ========================================================= */
 
   useEffect(() => {
     loadNotionDatabases();
   }, []);
 
-  /*
-    ========================================================
-    CLEANUP
-    ========================================================
-  */
+  /* =========================================================
+     CLEANUP
+     ========================================================= */
 
   useEffect(() => {
     return () => {
@@ -397,11 +407,31 @@ export default function Home() {
     };
   }, [audioUrl]);
 
-  /*
-    ========================================================
-    AUTH
-    ========================================================
-  */
+  /* =========================================================
+     AUTH HELPERS
+     ========================================================= */
+
+  async function getAccessToken() {
+    const {
+      data: {
+        session,
+      },
+    } =
+      await supabaseBrowser.auth.getSession();
+
+    if (
+      !session
+    ) {
+      window.location.href =
+        "/login";
+
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    return session.access_token;
+  }
 
   async function signOut() {
     try {
@@ -410,7 +440,8 @@ export default function Home() {
       );
 
       const {
-        error: signOutError,
+        error:
+          signOutError,
       } =
         await supabaseBrowser.auth.signOut();
 
@@ -435,11 +466,9 @@ export default function Home() {
     }
   }
 
-  /*
-    ========================================================
-    NOTION
-    ========================================================
-  */
+  /* =========================================================
+     NOTION
+     ========================================================= */
 
   async function loadNotionDatabases() {
     setLoadingDatabases(
@@ -455,19 +484,8 @@ export default function Home() {
     );
 
     try {
-      const {
-        data: { session },
-      } =
-        await supabaseBrowser.auth.getSession();
-
-      if (
-        !session
-      ) {
-        window.location.href =
-          "/login";
-
-        return;
-      }
+      const accessToken =
+        await getAccessToken();
 
       const response =
         await fetch(
@@ -475,13 +493,23 @@ export default function Home() {
           {
             headers: {
               Authorization:
-                `Bearer ${session.access_token}`,
+                `Bearer ${accessToken}`,
             },
           }
         );
 
       const data =
         (await response.json()) as NotionDatabasesResponse;
+
+      if (
+        response.status ===
+        401
+      ) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
 
       if (
         !response.ok
@@ -553,19 +581,8 @@ export default function Home() {
         ""
       );
 
-      const {
-        data: { session },
-      } =
-        await supabaseBrowser.auth.getSession();
-
-      if (
-        !session
-      ) {
-        window.location.href =
-          "/login";
-
-        return;
-      }
+      const accessToken =
+        await getAccessToken();
 
       const response =
         await fetch(
@@ -573,13 +590,23 @@ export default function Home() {
           {
             headers: {
               Authorization:
-                `Bearer ${session.access_token}`,
+                `Bearer ${accessToken}`,
             },
           }
         );
 
       const data =
         await response.json();
+
+      if (
+        response.status ===
+        401
+      ) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
 
       if (
         !response.ok
@@ -633,19 +660,8 @@ export default function Home() {
     );
 
     try {
-      const {
-        data: { session },
-      } =
-        await supabaseBrowser.auth.getSession();
-
-      if (
-        !session
-      ) {
-        window.location.href =
-          "/login";
-
-        return;
-      }
+      const accessToken =
+        await getAccessToken();
 
       const response =
         await fetch(
@@ -659,7 +675,7 @@ export default function Home() {
                 "application/json",
 
               Authorization:
-                `Bearer ${session.access_token}`,
+                `Bearer ${accessToken}`,
             },
 
             body:
@@ -672,6 +688,16 @@ export default function Home() {
 
       const data =
         (await response.json()) as NotionDatabaseSelectionResponse;
+
+      if (
+        response.status ===
+        401
+      ) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
 
       if (
         !response.ok
@@ -712,11 +738,9 @@ export default function Home() {
     );
   }
 
-  /*
-    ========================================================
-    HISTORY
-    ========================================================
-  */
+  /* =========================================================
+     HISTORY
+     ========================================================= */
 
   function createHistoryItem(
     structuredNote: StructuredNote,
@@ -775,17 +799,17 @@ export default function Home() {
     );
   }
 
-  /*
-    ========================================================
-    RECORDING
-    ========================================================
-  */
+  /* =========================================================
+     RECORDING
+     ========================================================= */
 
   async function startRecording() {
     try {
       setError(
         ""
       );
+
+      await getAccessToken();
 
       setNote(
         null
@@ -889,7 +913,8 @@ export default function Home() {
               );
 
             await processRecording(
-              blob
+              blob,
+              recordingSeconds
             );
           } catch (err) {
             setProcessingStep(
@@ -935,6 +960,14 @@ export default function Home() {
         "idle"
       );
 
+      if (
+        err instanceof Error &&
+        err.message ===
+          "Authentication required."
+      ) {
+        return;
+      }
+
       setError(
         "Could not access the microphone. Check your browser microphone permission."
       );
@@ -971,18 +1004,21 @@ export default function Home() {
     }
   }
 
-  /*
-    ========================================================
-    TRANSCRIPTION
-    ========================================================
-  */
+  /* =========================================================
+     TRANSCRIPTION
+     ========================================================= */
 
   async function transcribeBlob(
-    blob: Blob
+    blob: Blob,
+    durationSeconds:
+      number
   ) {
     setProcessingStep(
       "transcribing"
     );
+
+    const accessToken =
+      await getAccessToken();
 
     const formData =
       new FormData();
@@ -1004,12 +1040,29 @@ export default function Home() {
       `recording.${extension}`
     );
 
+    formData.append(
+      "durationSeconds",
+      String(
+        Math.max(
+          1,
+          Math.round(
+            durationSeconds
+          )
+        )
+      )
+    );
+
     const response =
       await fetch(
         "/api/transcribe",
         {
           method:
             "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${accessToken}`,
+          },
 
           body:
             formData,
@@ -1018,6 +1071,18 @@ export default function Home() {
 
     const data =
       await response.json();
+
+    if (
+      response.status ===
+      401
+    ) {
+      window.location.href =
+        "/login";
+
+      throw new Error(
+        "Your session expired. Please log in again."
+      );
+    }
 
     if (
       !response.ok
@@ -1031,11 +1096,9 @@ export default function Home() {
     return data.transcript as string;
   }
 
-  /*
-    ========================================================
-    STRUCTURE NOTE
-    ========================================================
-  */
+  /* =========================================================
+     STRUCTURE NOTE
+     ========================================================= */
 
   async function structureText(
     text: string
@@ -1043,6 +1106,9 @@ export default function Home() {
     setProcessingStep(
       "structuring"
     );
+
+    const accessToken =
+      await getAccessToken();
 
     const response =
       await fetch(
@@ -1054,6 +1120,9 @@ export default function Home() {
           headers: {
             "Content-Type":
               "application/json",
+
+            Authorization:
+              `Bearer ${accessToken}`,
           },
 
           body:
@@ -1066,6 +1135,18 @@ export default function Home() {
 
     const data =
       await response.json();
+
+    if (
+      response.status ===
+      401
+    ) {
+      window.location.href =
+        "/login";
+
+      throw new Error(
+        "Your session expired. Please log in again."
+      );
+    }
 
     if (
       !response.ok
@@ -1086,12 +1167,15 @@ export default function Home() {
   }
 
   async function processRecording(
-    blob: Blob
+    blob: Blob,
+    durationSeconds =
+      recordingSeconds
   ) {
     try {
       const newTranscript =
         await transcribeBlob(
-          blob
+          blob,
+          durationSeconds
         );
 
       setTranscript(
@@ -1192,15 +1276,14 @@ export default function Home() {
     }
 
     await processRecording(
-      audioBlob
+      audioBlob,
+      recordingSeconds
     );
   }
 
-  /*
-    ========================================================
-    SAVE TO NOTION
-    ========================================================
-  */
+  /* =========================================================
+     SAVE TO NOTION
+     ========================================================= */
 
   async function saveToNotion() {
     if (
@@ -1219,19 +1302,8 @@ export default function Home() {
     );
 
     try {
-      const {
-        data: { session },
-      } =
-        await supabaseBrowser.auth.getSession();
-
-      if (
-        !session
-      ) {
-        window.location.href =
-          "/login";
-
-        return;
-      }
+      const accessToken =
+        await getAccessToken();
 
       const response =
         await fetch(
@@ -1245,7 +1317,7 @@ export default function Home() {
                 "application/json",
 
               Authorization:
-                `Bearer ${session.access_token}`,
+                `Bearer ${accessToken}`,
             },
 
             body:
@@ -1275,6 +1347,16 @@ export default function Home() {
 
       const data =
         (await response.json()) as NotionSaveResponse;
+
+      if (
+        response.status ===
+        401
+      ) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
 
       if (
         !response.ok
@@ -1331,11 +1413,9 @@ export default function Home() {
     }
   }
 
-  /*
-    ========================================================
-    NOTE EDITING
-    ========================================================
-  */
+  /* =========================================================
+     NOTE EDITING
+     ========================================================= */
 
   function updateNote(
     changes: Partial<StructuredNote>
@@ -1382,10 +1462,9 @@ export default function Home() {
       return;
     }
 
-    const items =
-      [
-        ...note.actionItems,
-      ];
+    const items = [
+      ...note.actionItems,
+    ];
 
     items[index] =
       value;
@@ -1433,11 +1512,9 @@ export default function Home() {
     });
   }
 
-  /*
-    ========================================================
-    RESET
-    ========================================================
-  */
+  /* =========================================================
+     RESET
+     ========================================================= */
 
   function resetCapture() {
     if (
@@ -1521,17 +1598,17 @@ export default function Home() {
     );
 
     window.scrollTo({
-      top: 0,
+      top:
+        0,
+
       behavior:
         "smooth",
     });
   }
 
-  /*
-    ========================================================
-    HELPERS
-    ========================================================
-  */
+  /* =========================================================
+     HELPERS
+     ========================================================= */
 
   function formatRecordingTime(
     seconds: number
@@ -1591,51 +1668,53 @@ export default function Home() {
       processingStep ===
       "ready"
     ) {
-      return "Note Ready";
+      return notionSaved
+        ? "Synced"
+        : "Note Ready";
     }
 
     return "System Ready";
   }
 
-  /*
-    ========================================================
-    RENDER
-    ========================================================
-  */
+  /* =========================================================
+     RENDER
+     ========================================================= */
 
   return (
     <AuthGate>
       <main className="vtn-shell vtn-mobile-shell">
+
         <div className="vtn-orb vtn-orb-purple" />
         <div className="vtn-orb vtn-orb-cyan" />
 
         <div className="vtn-container pb-28 pt-4 md:pb-20 md:pt-5">
 
-          {/* =============================================
-              HUD
-          ============================================== */}
-
           <header className="vtn-mobile-hud sticky top-3 z-50 mb-6">
+
             <div className="vtn-glass flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 sm:px-5">
 
               <div className="flex min-w-0 items-center gap-3">
 
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 font-black text-white shadow-[0_0_26px_rgba(139,92,246,0.3)]">
+                <div className="vtn-brand-mark">
                   V
                 </div>
 
                 <div className="min-w-0">
+
                   <p className="truncate text-sm font-bold">
                     Voice to Notion
                   </p>
 
                   <div className="mt-1 flex items-center gap-2">
+
                     <span className="vtn-status-dot" />
 
                     <span className="truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       {systemLabel()}
                     </span>
+
                   </div>
+
                 </div>
 
               </div>
@@ -1653,6 +1732,7 @@ export default function Home() {
                     signingOut
                   }
                   className="vtn-mobile-logout vtn-secondary"
+                  aria-label="Log out"
                 >
                   {signingOut
                     ? "..."
@@ -1662,61 +1742,56 @@ export default function Home() {
               </div>
 
             </div>
-          </header>
 
-          {/* =============================================
-              MOBILE HERO
-          ============================================== */}
+          </header>
 
           <section className="vtn-mobile-hero mb-5 text-center md:hidden">
 
             <div className="vtn-eyebrow mb-3">
+
               <span className="vtn-eyebrow-dot" />
-              Neural Capture
+
+              Voice → AI → Notion
+
             </div>
 
             <h1 className="vtn-gradient-text text-[2rem] font-bold leading-[1.05] tracking-[-0.05em]">
-              Capture your thought.
+              Capture thoughts.
+              <br />
+              Turn them into action.
             </h1>
 
-            <p className="mx-auto mt-3 max-w-[300px] text-xs leading-5 text-[var(--muted)]">
-              Speak once. AI organizes it and sends it to Notion.
+            <p className="mx-auto mt-3 max-w-[310px] text-xs leading-5 text-[var(--muted)]">
+              Speak naturally. AI structures your thought and sends it directly to Notion.
             </p>
 
           </section>
 
-          {/* =============================================
-              DESKTOP HERO
-          ============================================== */}
-
           <section className="mb-8 hidden md:block">
 
             <div className="vtn-eyebrow mb-3">
+
               <span className="vtn-eyebrow-dot" />
-              Neural capture workspace
+
+              Voice → AI → Notion
+
             </div>
 
             <h1 className="vtn-gradient-text max-w-3xl text-4xl font-bold tracking-[-0.045em] lg:text-5xl">
-              Capture thoughts at the speed of speech.
+              Capture thoughts.
+              <br />
+              Turn them into action.
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Speak once. AI structures your thought and sends it directly into Notion.
+              Speak naturally. Voice to Notion transcribes, structures and sends your thought directly into your Notion workspace.
             </p>
 
           </section>
 
           <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
 
-            {/* ===========================================
-                LEFT SIDE
-            ============================================ */}
-
             <aside className="space-y-5">
-
-              {/* =========================================
-                  VOICE HERO
-              ========================================== */}
 
               <section
                 className={`vtn-card vtn-mobile-voice-card p-5 sm:p-6 ${
@@ -1731,6 +1806,7 @@ export default function Home() {
                   <div className="flex items-center justify-between">
 
                     <div>
+
                       <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
                         Voice Core
                       </span>
@@ -1738,6 +1814,7 @@ export default function Home() {
                       <h2 className="mt-1 text-lg font-semibold md:text-xl">
                         Capture
                       </h2>
+
                     </div>
 
                     <div className="vtn-badge font-mono">
@@ -1770,62 +1847,66 @@ export default function Home() {
                     >
 
                       <div className="vtn-record-orb vtn-mobile-record-orb">
+
                         <div className="vtn-record-core vtn-mobile-record-core flex items-center justify-center text-white">
 
-                          {isRecording
-                            ? (
-                              <span className="h-5 w-5 rounded-[5px] bg-white" />
-                            )
-                            : (
-                              <svg
-                                width="31"
-                                height="31"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                aria-hidden="true"
-                              >
-                                <rect
-                                  x="9"
-                                  y="3"
-                                  width="6"
-                                  height="11"
-                                  rx="3"
-                                  fill="currentColor"
-                                />
+                          {isRecording ? (
+                            <span className="h-5 w-5 rounded-[5px] bg-white" />
+                          ) : (
+                            <svg
+                              width="31"
+                              height="31"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              aria-hidden="true"
+                            >
+                              <rect
+                                x="9"
+                                y="3"
+                                width="6"
+                                height="11"
+                                rx="3"
+                                fill="currentColor"
+                              />
 
-                                <path
-                                  d="M6.5 11.5C6.5 14.54 8.96 17 12 17C15.04 17 17.5 14.54 17.5 11.5"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                />
+                              <path
+                                d="M6.5 11.5C6.5 14.54 8.96 17 12 17C15.04 17 17.5 14.54 17.5 11.5"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                              />
 
-                                <path
-                                  d="M12 17V21"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                />
-                              </svg>
-                            )}
+                              <path
+                                d="M12 17V21"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          )}
 
                         </div>
+
                       </div>
 
                     </button>
 
                     <p className="mt-5 text-sm font-semibold">
+
                       {isRecording
                         ? "Listening..."
                         : isBusy
                           ? systemLabel()
                           : "Tap to speak"}
+
                     </p>
 
                     <p className="mt-2 text-center text-[11px] leading-5 text-[var(--muted)] md:hidden">
+
                       {isRecording
                         ? "Speak naturally, then tap again to stop."
                         : "Your voice becomes structured knowledge automatically."}
+
                     </p>
 
                     <div
@@ -1835,6 +1916,7 @@ export default function Home() {
                           : ""
                       }`}
                     >
+
                       {Array.from({
                         length:
                           15,
@@ -1850,12 +1932,14 @@ export default function Home() {
                           />
                         )
                       )}
+
                     </div>
 
                   </div>
 
                   {audioUrl && (
                     <div className="mt-2">
+
                       <audio
                         controls
                         src={
@@ -1887,16 +1971,13 @@ export default function Home() {
                         </button>
 
                       </div>
+
                     </div>
                   )}
 
                 </div>
 
               </section>
-
-              {/* =========================================
-                  COMPACT NOTION DESTINATION
-              ========================================== */}
 
               <section className="vtn-card vtn-mobile-destination p-4 sm:p-5">
 
@@ -1913,12 +1994,12 @@ export default function Home() {
                       <div className="min-w-0">
 
                         <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
-                          Destination
+                          Notion Destination
                         </span>
 
                         <h2 className="mt-0.5 truncate text-sm font-semibold">
                           {notionWorkspaceName ||
-                            "Notion"}
+                            "Notion workspace"}
                         </h2>
 
                       </div>
@@ -2000,7 +2081,7 @@ export default function Home() {
                           className="vtn-primary min-h-11 px-3 text-xs"
                         >
                           {savingDatabase
-                            ? "Saving..."
+                            ? "Syncing..."
                             : destinationChanged
                               ? "Sync Destination"
                               : "Destination Synced"}
@@ -2030,13 +2111,19 @@ export default function Home() {
                       </button>
 
                       {notionDatabaseError && (
-                        <div className="vtn-error mt-3 rounded-xl p-3 text-xs">
+                        <div
+                          className="vtn-error mt-3 rounded-xl p-3 text-xs"
+                          role="alert"
+                        >
                           {notionDatabaseError}
                         </div>
                       )}
 
                       {notionDatabaseMessage && (
-                        <div className="vtn-success mt-3 rounded-xl p-3 text-xs">
+                        <div
+                          className="vtn-success mt-3 rounded-xl p-3 text-xs"
+                          role="status"
+                        >
                           {notionDatabaseMessage}
                         </div>
                       )}
@@ -2049,10 +2136,6 @@ export default function Home() {
               </section>
 
             </aside>
-
-            {/* ===========================================
-                WORKSPACE
-            ============================================ */}
 
             <section className="vtn-card vtn-mobile-workspace p-4 sm:p-6">
 
@@ -2069,10 +2152,6 @@ export default function Home() {
                   </h2>
 
                 </div>
-
-                {/* =======================================
-                    MOBILE TABS
-                ======================================== */}
 
                 <div className="vtn-mobile-tabs md:hidden">
 
@@ -2115,10 +2194,6 @@ export default function Home() {
                   </button>
 
                 </div>
-
-                {/* =======================================
-                    TRANSCRIPT
-                ======================================== */}
 
                 <div
                   className={
@@ -2196,19 +2271,14 @@ export default function Home() {
 
                 </div>
 
-                {/* =======================================
-                    ERRORS
-                ======================================== */}
-
                 {error && (
-                  <div className="vtn-error mt-4 rounded-xl p-3 text-xs">
+                  <div
+                    className="vtn-error mt-4 rounded-xl p-3 text-xs"
+                    role="alert"
+                  >
                     {error}
                   </div>
                 )}
-
-                {/* =======================================
-                    AI NOTE
-                ======================================== */}
 
                 <div
                   className={`${
@@ -2235,7 +2305,7 @@ export default function Home() {
                       </p>
 
                       <p className="mt-2 max-w-[250px] text-center text-[11px] leading-5 text-[var(--muted)]">
-                        Record something and your structured note will appear here.
+                        Tap to speak and your AI-structured note will appear here.
                       </p>
 
                     </div>
@@ -2246,7 +2316,7 @@ export default function Home() {
 
                         <div className="vtn-eyebrow">
                           <span className="vtn-eyebrow-dot" />
-                          AI structured
+                          AI Structured
                         </div>
 
                         <span
@@ -2303,10 +2373,6 @@ export default function Home() {
                         />
 
                       </div>
-
-                      {/* =================================
-                          SMART METADATA
-                      ================================== */}
 
                       <div className="vtn-mobile-metadata-grid grid gap-3 md:grid-cols-3">
 
@@ -2398,10 +2464,6 @@ export default function Home() {
 
                       </div>
 
-                      {/* =================================
-                          ACTION ITEMS
-                      ================================== */}
-
                       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4">
 
                         <div className="mb-3 flex items-center justify-between gap-3">
@@ -2435,7 +2497,7 @@ export default function Home() {
                           {note.actionItems.length ===
                           0 ? (
                             <p className="py-3 text-center text-[10px] text-[var(--muted)]">
-                              No actions detected.
+                              No action items detected.
                             </p>
                           ) : (
                             note.actionItems.map(
@@ -2475,6 +2537,7 @@ export default function Home() {
                                       )
                                     }
                                     className="vtn-secondary min-w-10 px-2"
+                                    aria-label="Remove action item"
                                   >
                                     ×
                                   </button>
@@ -2487,8 +2550,6 @@ export default function Home() {
                         </div>
 
                       </div>
-
-                      {/* Desktop save button */}
 
                       <div className="hidden md:block">
 
@@ -2539,10 +2600,6 @@ export default function Home() {
 
           </div>
 
-          {/* =============================================
-              MOBILE RECENT CAPTURES
-          ============================================== */}
-
           <section className="vtn-card mt-5 p-4 sm:p-6">
 
             <div className="relative z-10">
@@ -2591,7 +2648,7 @@ export default function Home() {
                   </p>
 
                   <p className="mt-1 text-[10px] text-[var(--muted)]">
-                    Your last 10 are stored locally.
+                    Your last 10 captures are stored locally in this browser.
                   </p>
 
                 </div>
@@ -2662,11 +2719,13 @@ export default function Home() {
 
           </section>
 
-        </div>
+          {accountEmail && (
+            <p className="mt-5 text-center text-[9px] text-[var(--muted)]">
+              Signed in as {accountEmail}
+            </p>
+          )}
 
-        {/* ===============================================
-            MOBILE STICKY ACTION
-        ================================================ */}
+        </div>
 
         {note && (
           <div className="vtn-mobile-bottom-action md:hidden">
@@ -2694,7 +2753,7 @@ export default function Home() {
                   rel="noreferrer"
                   className="vtn-success flex min-h-12 shrink-0 items-center rounded-xl px-4 text-xs font-semibold"
                 >
-                  Open ↗
+                  Open in Notion ↗
                 </a>
               ) : (
                 <button

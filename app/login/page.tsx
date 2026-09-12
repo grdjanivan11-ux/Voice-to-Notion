@@ -16,40 +16,68 @@ type AuthMode =
   | "signup";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [mode, setMode] =
-    useState<AuthMode>("login");
+  const [
+    mode,
+    setMode,
+  ] =
+    useState<AuthMode>(
+      "login"
+    );
 
-  const [email, setEmail] =
+  const [
+    email,
+    setEmail,
+  ] =
     useState("");
 
-  const [password, setPassword] =
+  const [
+    password,
+    setPassword,
+  ] =
     useState("");
 
   const [
     showPassword,
     setShowPassword,
-  ] = useState(false);
-
-  const [loading, setLoading] =
+  ] =
     useState(false);
 
-  const [error, setError] =
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(false);
+
+  const [
+    error,
+    setError,
+  ] =
     useState("");
 
-  const [message, setMessage] =
+  const [
+    message,
+    setMessage,
+  ] =
     useState("");
 
   useEffect(() => {
     async function checkExistingSession() {
       const {
-        data: { session },
+        data: {
+          session,
+        },
       } =
         await supabaseBrowser.auth.getSession();
 
-      if (session) {
-        router.replace("/");
+      if (
+        session
+      ) {
+        router.replace(
+          "/"
+        );
       }
     }
 
@@ -59,11 +87,21 @@ export default function LoginPage() {
   function switchMode(
     nextMode: AuthMode
   ) {
-    setMode(nextMode);
+    setMode(
+      nextMode
+    );
 
-    setError("");
-    setMessage("");
-    setPassword("");
+    setError(
+      ""
+    );
+
+    setMessage(
+      ""
+    );
+
+    setPassword(
+      ""
+    );
   }
 
   async function handleSubmit(
@@ -71,36 +109,42 @@ export default function LoginPage() {
   ) {
     event.preventDefault();
 
-    setLoading(true);
-    setError("");
-    setMessage("");
+    setLoading(
+      true
+    );
+
+    setError(
+      ""
+    );
+
+    setMessage(
+      ""
+    );
 
     try {
       const cleanEmail =
         email.trim();
 
-      if (!cleanEmail) {
+      if (
+        !cleanEmail
+      ) {
         throw new Error(
           "Enter your email address."
         );
       }
 
       if (
-        password.length < 6
+        password.length <
+        6
       ) {
         throw new Error(
           "Password must contain at least 6 characters."
         );
       }
 
-      /*
-        =====================================================
-        SIGN UP
-        =====================================================
-      */
-
       if (
-        mode === "signup"
+        mode ===
+        "signup"
       ) {
         const {
           data,
@@ -122,36 +166,28 @@ export default function LoginPage() {
           throw signUpError;
         }
 
-        /*
-          If email confirmation is enabled,
-          Supabase may create the account
-          without returning a session.
-        */
-
         if (
           !data.session
         ) {
           setMessage(
-            "Account created. Check your email and confirm your address before logging in."
+            "Account created successfully. Check your email and confirm your address, then return here to log in."
           );
 
-          setPassword("");
+          setPassword(
+            ""
+          );
 
           return;
         }
 
-        router.replace("/");
+        router.replace(
+          "/"
+        );
 
         router.refresh();
 
         return;
       }
-
-      /*
-        =====================================================
-        LOG IN
-        =====================================================
-      */
 
       const {
         error:
@@ -172,7 +208,9 @@ export default function LoginPage() {
         throw signInError;
       }
 
-      router.replace("/");
+      router.replace(
+        "/"
+      );
 
       router.refresh();
     } catch (err) {
@@ -189,70 +227,69 @@ export default function LoginPage() {
         );
       } else {
         setError(
-          "Authentication failed."
+          "Authentication failed. Please try again."
         );
       }
     } finally {
-      setLoading(false);
+      setLoading(
+        false
+      );
     }
   }
 
   return (
     <main className="vtn-shell min-h-screen overflow-hidden">
-      {/* ===================================================
-          AMBIENT BACKGROUND
-      ==================================================== */}
 
       <div className="vtn-orb vtn-orb-purple" />
 
       <div className="vtn-orb vtn-orb-cyan" />
 
-      <div className="pointer-events-none fixed inset-0 opacity-[0.13] [background-image:linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="vtn-auth-grid" />
 
-      {/* ===================================================
-          TOP BAR
-      ==================================================== */}
+      <header className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
 
-      <div className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between px-5 py-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 font-black text-white shadow-[0_0_30px_rgba(139,92,246,0.28)]">
+
+          <div className="vtn-brand-mark">
             V
           </div>
 
           <div>
+
             <p className="text-sm font-bold tracking-tight text-[var(--foreground)]">
               Voice to Notion
             </p>
 
             <div className="mt-1 flex items-center gap-2">
+
               <span className="vtn-status-dot" />
 
               <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)]">
-                AI productivity
+                System Ready
               </span>
+
             </div>
+
           </div>
+
         </div>
 
         <ThemeToggle />
-      </div>
 
-      {/* ===================================================
-          MAIN AUTH LAYOUT
-      ==================================================== */}
+      </header>
 
       <div className="relative z-10 mx-auto grid min-h-[calc(100vh-80px)] w-full max-w-[1440px] items-center gap-10 px-5 pb-10 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-10 xl:gap-16">
 
-        {/* ===============================================
-            LEFT BRAND / PRODUCT SIDE
-        ================================================ */}
-
         <section className="hidden lg:block">
+
           <div className="max-w-2xl">
 
             <div className="vtn-eyebrow mb-5">
+
               <span className="vtn-eyebrow-dot" />
+
               Voice → AI → Notion
+
             </div>
 
             <h1 className="vtn-gradient-text text-5xl font-bold leading-[1.02] tracking-[-0.055em] xl:text-6xl">
@@ -262,70 +299,75 @@ export default function LoginPage() {
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-[var(--muted)]">
-              Speak naturally and let Voice to Notion turn your voice into organized notes, tasks, priorities, due dates and structured knowledge.
+              Speak naturally. Voice to Notion turns your voice into organized notes, action items, categories, priorities and due dates — then sends everything directly to your Notion workspace.
             </p>
-
-            {/* ===========================================
-                PRODUCT FLOW
-            ============================================ */}
 
             <div className="mt-10 grid gap-3">
 
-              <div className="vtn-card flex items-center gap-4 p-4">
+              <div className="vtn-card vtn-auth-feature flex items-center gap-4 p-4">
+
                 <div className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10 text-lg text-violet-400">
                   🎙
                 </div>
 
                 <div className="relative z-10">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">
-                    1. Speak naturally
+
+                  <p className="text-sm font-semibold">
+                    Speak naturally
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
                     Capture a thought from the web app or Chrome extension.
                   </p>
+
                 </div>
+
               </div>
 
-              <div className="vtn-card flex items-center gap-4 p-4">
+              <div className="vtn-card vtn-auth-feature flex items-center gap-4 p-4">
+
                 <div className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10 text-lg text-cyan-400">
                   ✦
                 </div>
 
                 <div className="relative z-10">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">
-                    2. AI structures it
+
+                  <p className="text-sm font-semibold">
+                    AI structures it
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                    Automatically extracts title, summary, actions, category, priority and date.
+                    Title, summary, tasks, category, priority and due date are organized automatically.
                   </p>
+
                 </div>
+
               </div>
 
-              <div className="vtn-card flex items-center gap-4 p-4">
-                <div className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-lg text-emerald-400">
+              <div className="vtn-card vtn-auth-feature flex items-center gap-4 p-4">
+
+                <div className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-sm font-black text-emerald-400">
                   N
                 </div>
 
                 <div className="relative z-10">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">
-                    3. Sync to Notion
+
+                  <p className="text-sm font-semibold">
+                    Sync to Notion
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                    Your structured note lands directly in your chosen workspace.
+                    Your structured capture lands directly in your chosen Notion destination.
                   </p>
+
                 </div>
+
               </div>
 
             </div>
 
-            {/* ===========================================
-                TRUST / FEATURE STRIP
-            ============================================ */}
-
             <div className="mt-7 flex flex-wrap gap-2">
+
               <span className="vtn-badge">
                 <span className="vtn-status-dot" />
                 Secure account
@@ -342,61 +384,65 @@ export default function LoginPage() {
               <span className="vtn-badge">
                 Web + Extension
               </span>
+
             </div>
 
           </div>
-        </section>
 
-        {/* ===============================================
-            AUTH CARD
-        ================================================ */}
+        </section>
 
         <section className="mx-auto w-full max-w-[520px]">
 
-          {/* Mobile branding */}
-
           <div className="mb-7 lg:hidden">
+
             <div className="vtn-eyebrow mb-3">
+
               <span className="vtn-eyebrow-dot" />
+
               Voice → AI → Notion
+
             </div>
 
-            <h1 className="vtn-gradient-text text-4xl font-bold leading-tight tracking-[-0.045em]">
-              Capture thoughts at the speed of speech.
+            <h1 className="vtn-gradient-text text-4xl font-bold leading-[1.06] tracking-[-0.045em]">
+              Capture thoughts.
+              <br />
+              Turn them into action.
             </h1>
 
-            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Turn voice into structured Notion knowledge.
+            <p className="mt-3 max-w-md text-sm leading-6 text-[var(--muted)]">
+              Speak naturally. AI structures it. Notion keeps it organized.
             </p>
+
           </div>
 
-          <div className="vtn-card p-5 sm:p-7 lg:p-8">
-            <div className="relative z-10">
+          <div className="vtn-card vtn-auth-card p-5 sm:p-7 lg:p-8">
 
-              {/* =========================================
-                  AUTH HEADER
-              ========================================== */}
+            <div className="relative z-10">
 
               <div className="mb-7">
 
                 <div className="flex items-start justify-between gap-5">
 
                   <div>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--purple-soft)]">
+
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--violet-soft)]">
                       Account Access
                     </span>
 
-                    <h2 className="mt-2 text-2xl font-bold tracking-[-0.035em] text-[var(--foreground)] sm:text-3xl">
-                      {mode === "login"
+                    <h2 className="mt-2 text-2xl font-bold tracking-[-0.035em] sm:text-3xl">
+                      {mode ===
+                      "login"
                         ? "Welcome back."
-                        : "Create your workspace."}
+                        : "Create your account."}
                     </h2>
 
                     <p className="mt-2 max-w-sm text-xs leading-5 text-[var(--muted)]">
-                      {mode === "login"
+                      {mode ===
+                      "login"
                         ? "Sign in to continue capturing and syncing your thoughts."
                         : "Create your Voice to Notion account and start building your knowledge system."}
                     </p>
+
                   </div>
 
                   <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 text-lg text-violet-400 shadow-[0_0_30px_rgba(139,92,246,0.1)] sm:flex">
@@ -404,11 +450,8 @@ export default function LoginPage() {
                   </div>
 
                 </div>
-              </div>
 
-              {/* =========================================
-                  LOGIN / SIGNUP TOGGLE
-              ========================================== */}
+              </div>
 
               <div className="mb-6 grid grid-cols-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-1">
 
@@ -419,11 +462,14 @@ export default function LoginPage() {
                       "login"
                     )
                   }
-                  disabled={loading}
-                  className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    mode === "login"
-                      ? "bg-[var(--surface-strong)] text-[var(--foreground)] shadow-sm"
-                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  disabled={
+                    loading
+                  }
+                  className={`vtn-auth-mode ${
+                    mode ===
+                    "login"
+                      ? "is-active"
+                      : ""
                   }`}
                 >
                   Log In
@@ -436,11 +482,14 @@ export default function LoginPage() {
                       "signup"
                     )
                   }
-                  disabled={loading}
-                  className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    mode === "signup"
-                      ? "bg-[var(--surface-strong)] text-[var(--foreground)] shadow-sm"
-                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  disabled={
+                    loading
+                  }
+                  className={`vtn-auth-mode ${
+                    mode ===
+                    "signup"
+                      ? "is-active"
+                      : ""
                   }`}
                 >
                   Sign Up
@@ -448,18 +497,15 @@ export default function LoginPage() {
 
               </div>
 
-              {/* =========================================
-                  FORM
-              ========================================== */}
-
               <form
-                onSubmit={handleSubmit}
+                onSubmit={
+                  handleSubmit
+                }
                 className="space-y-5"
               >
 
-                {/* EMAIL */}
-
                 <div>
+
                   <label
                     htmlFor="email"
                     className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
@@ -468,15 +514,18 @@ export default function LoginPage() {
                   </label>
 
                   <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--muted)]">
+
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-sm text-[var(--muted)]">
                       @
-                    </div>
+                    </span>
 
                     <input
                       id="email"
                       type="email"
                       autoComplete="email"
-                      value={email}
+                      value={
+                        email
+                      }
                       onChange={(
                         event
                       ) =>
@@ -485,20 +534,23 @@ export default function LoginPage() {
                         )
                       }
                       placeholder="you@example.com"
-                      disabled={loading}
+                      disabled={
+                        loading
+                      }
                       className="vtn-input h-12 pl-10 pr-4 text-sm disabled:opacity-60"
                     />
+
                   </div>
+
                 </div>
 
-                {/* PASSWORD */}
-
                 <div>
+
                   <div className="mb-2 flex items-center justify-between gap-3">
 
                     <label
                       htmlFor="password"
-                      className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
+                      className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
                     >
                       Password
                     </label>
@@ -519,11 +571,14 @@ export default function LoginPage() {
                           : "password"
                       }
                       autoComplete={
-                        mode === "login"
+                        mode ===
+                        "login"
                           ? "current-password"
                           : "new-password"
                       }
-                      value={password}
+                      value={
+                        password
+                      }
                       onChange={(
                         event
                       ) =>
@@ -532,7 +587,9 @@ export default function LoginPage() {
                         )
                       }
                       placeholder="••••••••"
-                      disabled={loading}
+                      disabled={
+                        loading
+                      }
                       className="vtn-input h-12 px-4 pr-20 text-sm disabled:opacity-60"
                     />
 
@@ -540,11 +597,15 @@ export default function LoginPage() {
                       type="button"
                       onClick={() =>
                         setShowPassword(
-                          (current) =>
+                          (
+                            current
+                          ) =>
                             !current
                         )
                       }
-                      disabled={loading}
+                      disabled={
+                        loading
+                      }
                       className="absolute inset-y-0 right-0 flex items-center px-4 text-[10px] font-semibold text-[var(--muted)] transition hover:text-[var(--foreground)] disabled:opacity-50"
                     >
                       {showPassword
@@ -553,83 +614,86 @@ export default function LoginPage() {
                     </button>
 
                   </div>
+
                 </div>
 
-                {/* =======================================
-                    ERROR
-                ======================================== */}
-
                 {error && (
-                  <div className="vtn-error rounded-2xl p-4">
-                    <div className="flex items-start gap-3">
+                  <div
+                    className="vtn-error vtn-feedback-card"
+                    role="alert"
+                  >
 
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-500/20 bg-red-500/10 text-xs text-red-400">
-                        !
-                      </div>
+                    <div className="vtn-feedback-icon">
+                      !
+                    </div>
 
-                      <div>
-                        <p className="text-xs font-semibold text-red-400">
-                          Authentication failed
-                        </p>
+                    <div>
 
-                        <p className="mt-1 text-xs leading-5 text-red-400/80">
-                          {error}
-                        </p>
-                      </div>
+                      <p className="text-xs font-semibold">
+                        Authentication failed
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 opacity-80">
+                        {error}
+                      </p>
 
                     </div>
+
                   </div>
                 )}
-
-                {/* =======================================
-                    SUCCESS MESSAGE
-                ======================================== */}
 
                 {message && (
-                  <div className="vtn-success rounded-2xl p-4">
-                    <div className="flex items-start gap-3">
+                  <div
+                    className="vtn-success vtn-feedback-card"
+                    role="status"
+                  >
 
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-400">
-                        ✓
-                      </div>
+                    <div className="vtn-feedback-icon">
+                      ✓
+                    </div>
 
-                      <div>
-                        <p className="text-xs font-semibold text-emerald-400">
-                          Account created
-                        </p>
+                    <div>
 
-                        <p className="mt-1 text-xs leading-5 text-emerald-400/80">
-                          {message}
-                        </p>
-                      </div>
+                      <p className="text-xs font-semibold">
+                        Account created
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 opacity-80">
+                        {message}
+                      </p>
 
                     </div>
+
                   </div>
                 )}
-
-                {/* =======================================
-                    PRIMARY ACTION
-                ======================================== */}
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="vtn-primary flex w-full items-center justify-center gap-2 px-5 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    loading
+                  }
+                  className="vtn-primary flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
+
                   {loading ? (
                     <>
-                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+
+                      <span className="vtn-spinner" />
 
                       <span>
-                        {mode === "login"
+                        {mode ===
+                        "login"
                           ? "Entering workspace..."
                           : "Creating account..."}
                       </span>
+
                     </>
                   ) : (
                     <>
+
                       <span>
-                        {mode === "login"
+                        {mode ===
+                        "login"
                           ? "Enter Workspace"
                           : "Create Account"}
                       </span>
@@ -637,20 +701,20 @@ export default function LoginPage() {
                       <span>
                         →
                       </span>
+
                     </>
                   )}
+
                 </button>
 
               </form>
 
-              {/* =========================================
-                  MODE HELPER
-              ========================================== */}
-
               <div className="mt-6 border-t border-[var(--border)] pt-5 text-center">
 
                 <p className="text-xs text-[var(--muted)]">
-                  {mode === "login"
+
+                  {mode ===
+                  "login"
                     ? "New to Voice to Notion?"
                     : "Already have an account?"}
 
@@ -660,45 +724,47 @@ export default function LoginPage() {
                     type="button"
                     onClick={() =>
                       switchMode(
-                        mode === "login"
+                        mode ===
+                        "login"
                           ? "signup"
                           : "login"
                       )
                     }
-                    disabled={loading}
-                    className="font-semibold text-violet-400 transition hover:text-violet-300"
+                    disabled={
+                      loading
+                    }
+                    className="font-semibold text-violet-400 transition hover:text-violet-300 disabled:opacity-50"
                   >
-                    {mode === "login"
+                    {mode ===
+                    "login"
                       ? "Create account"
                       : "Log in"}
                   </button>
+
                 </p>
 
               </div>
 
             </div>
-          </div>
 
-          {/* =============================================
-              AUTH FOOTER
-          ============================================== */}
+          </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-[var(--muted)]">
 
             <span>
-              Secure Auth
+              Voice
             </span>
 
-            <span className="h-1 w-1 rounded-full bg-violet-500" />
+            <span className="vtn-footer-dot" />
 
             <span>
-              AI Structured
+              AI
             </span>
 
-            <span className="h-1 w-1 rounded-full bg-violet-500" />
+            <span className="vtn-footer-dot" />
 
             <span>
-              Notion Connected
+              Notion
             </span>
 
           </div>
@@ -706,6 +772,7 @@ export default function LoginPage() {
         </section>
 
       </div>
+
     </main>
   );
 }

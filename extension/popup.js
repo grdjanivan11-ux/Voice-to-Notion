@@ -243,10 +243,6 @@ const categoryInput =
     "category"
   );
 
-/*
-  NEW C8.2.6 PRIORITY FIELD
-*/
-
 const priorityInput =
   document.getElementById(
     "priority"
@@ -288,7 +284,7 @@ const errorBox =
   );
 
 /* =========================================================
-   APPLICATION STATE
+   STATE
    ========================================================= */
 
 let mediaRecorder =
@@ -298,6 +294,9 @@ let audioChunks =
   [];
 
 let recordingSeconds =
+  0;
+
+let lastRecordingSeconds =
   0;
 
 let timerInterval =
@@ -332,7 +331,8 @@ async function initializeTheme() {
       ];
 
     const theme =
-      savedTheme === "light"
+      savedTheme ===
+      "light"
         ? "light"
         : "dark";
 
@@ -364,10 +364,12 @@ async function toggleTheme() {
   const currentTheme =
     document.body.getAttribute(
       "data-theme"
-    ) || "dark";
+    ) ||
+    "dark";
 
   const nextTheme =
-    currentTheme === "dark"
+    currentTheme ===
+    "dark"
       ? "light"
       : "dark";
 
@@ -389,7 +391,7 @@ async function toggleTheme() {
 }
 
 /* =========================================================
-   SYSTEM UI
+   SYSTEM STATE
    ========================================================= */
 
 function setSystemState(
@@ -405,7 +407,8 @@ function setSystemState(
   );
 
   if (
-    state === "recording"
+    state ===
+    "recording"
   ) {
     systemDot.classList.add(
       "recording"
@@ -415,7 +418,8 @@ function setSystemState(
   }
 
   if (
-    state === "busy"
+    state ===
+    "busy"
   ) {
     systemDot.classList.add(
       "busy"
@@ -446,7 +450,8 @@ function setVoiceState(
     true;
 
   if (
-    state === "recording"
+    state ===
+    "recording"
   ) {
     voiceCard.classList.add(
       "recording"
@@ -460,11 +465,16 @@ function setVoiceState(
       "active"
     );
 
+    recordButton.setAttribute(
+      "aria-label",
+      "Stop recording"
+    );
+
     statusText.textContent =
-      "Listening";
+      "Listening...";
 
     voiceSubstatus.textContent =
-      "Speak naturally. Tap again when you're finished.";
+      "Speak naturally, then tap again to stop.";
 
     setSystemState(
       "recording",
@@ -474,8 +484,14 @@ function setVoiceState(
     return;
   }
 
+  recordButton.setAttribute(
+    "aria-label",
+    "Start recording"
+  );
+
   if (
-    state === "transcribing"
+    state ===
+    "transcribing"
   ) {
     processingIndicator.hidden =
       false;
@@ -502,13 +518,14 @@ function setVoiceState(
   }
 
   if (
-    state === "structuring"
+    state ===
+    "structuring"
   ) {
     processingIndicator.hidden =
       false;
 
     processingText.textContent =
-      "AI structuring note";
+      "AI Structuring";
 
     transcriptShell.classList.add(
       "processing"
@@ -518,7 +535,7 @@ function setVoiceState(
       "AI Structuring";
 
     voiceSubstatus.textContent =
-      "Extracting title, summary, tasks, category, priority and date.";
+      "Organizing title, summary, actions, category, priority and due date.";
 
     setSystemState(
       "busy",
@@ -529,7 +546,8 @@ function setVoiceState(
   }
 
   if (
-    state === "saving"
+    state ===
+    "saving"
   ) {
     processingIndicator.hidden =
       false;
@@ -552,13 +570,32 @@ function setVoiceState(
   }
 
   if (
-    state === "ready"
+    state ===
+    "synced"
+  ) {
+    statusText.textContent =
+      "Synced";
+
+    voiceSubstatus.textContent =
+      "Your note is safely stored in Notion.";
+
+    setSystemState(
+      "ready",
+      "Synced"
+    );
+
+    return;
+  }
+
+  if (
+    state ===
+    "ready"
   ) {
     statusText.textContent =
       "Note ready";
 
     voiceSubstatus.textContent =
-      "Review it below or send it directly to Notion.";
+      "Review your structured note or send it to Notion.";
 
     setSystemState(
       "ready",
@@ -572,7 +609,7 @@ function setVoiceState(
     "Tap to speak";
 
   voiceSubstatus.textContent =
-    "Your thought becomes a structured Notion note automatically.";
+    "Speak naturally. AI structures your thought and sends it directly to Notion.";
 
   setSystemState(
     "ready",
@@ -586,18 +623,21 @@ function updateTranscriptCount() {
 
   transcriptCount.textContent =
     `${count} ${
-      count === 1
+      count ===
+      1
         ? "character"
         : "characters"
     }`;
 }
 
 /* =========================================================
-   PRIORITY UI
+   PRIORITY
    ========================================================= */
 
 function updatePriorityAppearance() {
-  if (!priorityInput) {
+  if (
+    !priorityInput
+  ) {
     return;
   }
 
@@ -616,7 +656,8 @@ function setAuthMessage(
   isError = false
 ) {
   authMessage.textContent =
-    message || "";
+    message ||
+    "";
 
   authMessage.hidden =
     !message;
@@ -660,10 +701,14 @@ function setAppAuthenticated(
 
     profileInitial.textContent =
       cleanEmail
-        .charAt(0)
+        .charAt(
+          0
+        )
         .toUpperCase();
 
-    setAuthMessage("");
+    setAuthMessage(
+      ""
+    );
   }
 }
 
@@ -671,7 +716,9 @@ async function requireAuthSession() {
   const auth =
     window.voiceToNotionAuth;
 
-  if (!auth) {
+  if (
+    !auth
+  ) {
     throw new Error(
       "Extension authentication is not available."
     );
@@ -730,7 +777,9 @@ async function initializeAuth() {
     const auth =
       window.voiceToNotionAuth;
 
-    if (!auth) {
+    if (
+      !auth
+    ) {
       throw new Error(
         "Extension authentication failed to load."
       );
@@ -739,7 +788,9 @@ async function initializeAuth() {
     const session =
       await auth.getValidAuthSession();
 
-    if (!session) {
+    if (
+      !session
+    ) {
       setAppAuthenticated(
         false
       );
@@ -782,7 +833,7 @@ async function initializeAuth() {
 }
 
 /* =========================================================
-   RESPONSE HELPERS
+   JSON RESPONSE
    ========================================================= */
 
 async function readJsonResponse(
@@ -792,7 +843,8 @@ async function readJsonResponse(
   const contentType =
     response.headers.get(
       "content-type"
-    ) || "";
+    ) ||
+    "";
 
   if (
     !contentType.includes(
@@ -824,7 +876,8 @@ function setDestinationMessage(
   isError = false
 ) {
   notionDestinationMessage.textContent =
-    message || "";
+    message ||
+    "";
 
   notionDestinationMessage.hidden =
     !message;
@@ -842,7 +895,7 @@ function resetNotionDestinationUI() {
   notionDatabaseSelect.innerHTML =
     `
       <option value="">
-        Choose a database...
+        Select database...
       </option>
     `;
 
@@ -866,7 +919,9 @@ function resetNotionDestinationUI() {
   savedDestinationId =
     "";
 
-  setDestinationMessage("");
+  setDestinationMessage(
+    ""
+  );
 }
 
 function updateDestinationButton() {
@@ -895,7 +950,8 @@ async function loadNotionDestination() {
       await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/notion/databases`,
         {
-          method: "GET",
+          method:
+            "GET",
         }
       );
 
@@ -905,7 +961,9 @@ async function loadNotionDestination() {
         "NOTION DATABASE"
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         data.error ||
           "Could not load your Notion destination."
@@ -913,13 +971,18 @@ async function loadNotionDestination() {
     }
 
     if (
-      data.connected === false
+      data.connected ===
+      false
     ) {
       notionDestinationLoading.hidden =
         true;
 
       notionConnectionBadge.textContent =
         "Offline";
+
+      notionConnectionBadge.classList.add(
+        "error"
+      );
 
       setDestinationMessage(
         "Connect Notion from the web app first.",
@@ -950,12 +1013,14 @@ async function loadNotionDestination() {
     notionDatabaseSelect.innerHTML =
       `
         <option value="">
-          Choose a database...
+          Select database...
         </option>
       `;
 
     dataSources.forEach(
-      (source) => {
+      (
+        source
+      ) => {
         const option =
           document.createElement(
             "option"
@@ -980,7 +1045,9 @@ async function loadNotionDestination() {
 
     const selectionExists =
       dataSources.some(
-        (source) =>
+        (
+          source
+        ) =>
           source.id ===
           savedDestinationId
       );
@@ -999,7 +1066,8 @@ async function loadNotionDestination() {
     updateDestinationButton();
 
     if (
-      dataSources.length === 0
+      dataSources.length ===
+      0
     ) {
       setDestinationMessage(
         "No accessible Notion databases were found.",
@@ -1047,7 +1115,9 @@ async function saveNotionDestinationSelection() {
   const dataSourceId =
     notionDatabaseSelect.value;
 
-  if (!dataSourceId) {
+  if (
+    !dataSourceId
+  ) {
     setDestinationMessage(
       "Choose a database first.",
       true
@@ -1063,13 +1133,16 @@ async function saveNotionDestinationSelection() {
     saveDestinationButton.textContent =
       "Syncing...";
 
-    setDestinationMessage("");
+    setDestinationMessage(
+      ""
+    );
 
     const response =
       await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/notion/database/select`,
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             "Content-Type":
@@ -1089,7 +1162,9 @@ async function saveNotionDestinationSelection() {
         "DESTINATION SAVE"
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         data.error ||
           "Could not save the Notion destination."
@@ -1140,11 +1215,13 @@ function formatTime(
 ) {
   const minutes =
     Math.floor(
-      seconds / 60
+      seconds /
+        60
     );
 
   const remainingSeconds =
-    seconds % 60;
+    seconds %
+    60;
 
   return `${String(
     minutes
@@ -1283,6 +1360,9 @@ function resetCaptureUI() {
   recordingSeconds =
     0;
 
+  lastRecordingSeconds =
+    0;
+
   waveform.classList.remove(
     "active"
   );
@@ -1343,7 +1423,8 @@ async function checkMicrophonePermission() {
   try {
     const permission =
       await navigator.permissions.query({
-        name: "microphone",
+        name:
+          "microphone",
       });
 
     return permission.state;
@@ -1376,6 +1457,37 @@ function renderActionItems(
   actionItemsContainer.innerHTML =
     "";
 
+  if (
+    items.length ===
+    0
+  ) {
+    const empty =
+      document.createElement(
+        "p"
+      );
+
+    empty.textContent =
+      "No action items detected.";
+
+    empty.style.margin =
+      "8px 0";
+
+    empty.style.color =
+      "var(--muted)";
+
+    empty.style.fontSize =
+      "10px";
+
+    empty.style.textAlign =
+      "center";
+
+    actionItemsContainer.appendChild(
+      empty
+    );
+
+    return;
+  }
+
   items.forEach(
     (
       item,
@@ -1405,7 +1517,9 @@ function renderActionItems(
 
       input.addEventListener(
         "input",
-        (event) => {
+        (
+          event
+        ) => {
           if (
             !currentNote
           ) {
@@ -1437,6 +1551,11 @@ function renderActionItems(
 
       removeButton.title =
         "Remove action item";
+
+      removeButton.setAttribute(
+        "aria-label",
+        "Remove action item"
+      );
 
       removeButton.addEventListener(
         "click",
@@ -1505,9 +1624,12 @@ function populateStructuredNote(
       "Other",
 
     priority:
-      note.priority === "High" ||
-      note.priority === "Medium" ||
-      note.priority === "Low"
+      note.priority ===
+        "High" ||
+      note.priority ===
+        "Medium" ||
+      note.priority ===
+        "Low"
         ? note.priority
         : "Low",
 
@@ -1598,10 +1720,11 @@ async function structureTranscript(
     );
 
     const response =
-      await fetch(
+      await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/structure-note`,
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             "Content-Type":
@@ -1682,7 +1805,8 @@ async function structureTranscript(
    ========================================================= */
 
 async function transcribeAudio(
-  audioBlob
+  audioBlob,
+  durationSeconds
 ) {
   try {
     clearError();
@@ -1739,11 +1863,25 @@ async function transcribeAudio(
       `recording.${extension}`
     );
 
+    formData.append(
+      "durationSeconds",
+      String(
+        Math.max(
+          1,
+          Math.round(
+            durationSeconds ||
+              1
+          )
+        )
+      )
+    );
+
     const response =
-      await fetch(
+      await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/transcribe`,
         {
-          method: "POST",
+          method:
+            "POST",
 
           body:
             formData,
@@ -1879,7 +2017,9 @@ async function saveToNotion() {
     const cleanActionItems =
       currentNote.actionItems
         .map(
-          (item) =>
+          (
+            item
+          ) =>
             item.trim()
         )
         .filter(
@@ -1890,7 +2030,8 @@ async function saveToNotion() {
       await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/notion/save`,
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             "Content-Type":
@@ -1955,21 +2096,16 @@ async function saveToNotion() {
         false;
     }
 
-    setVoiceState(
-      "ready"
-    );
-
-    setSystemState(
-      "ready",
-      "Synced"
-    );
-
     setSaveBusy(
       false
     );
 
     saveButton.disabled =
       true;
+
+    setVoiceState(
+      "synced"
+    );
   } catch (error) {
     notionSaved =
       false;
@@ -2061,7 +2197,8 @@ async function startRecording() {
     const stream =
       await navigator.mediaDevices.getUserMedia(
         {
-          audio: true,
+          audio:
+            true,
         }
       );
 
@@ -2075,7 +2212,9 @@ async function startRecording() {
 
     mediaRecorder.addEventListener(
       "dataavailable",
-      (event) => {
+      (
+        event
+      ) => {
         if (
           event.data.size >
           0
@@ -2126,12 +2265,15 @@ async function startRecording() {
           stream
             .getTracks()
             .forEach(
-              (track) =>
+              (
+                track
+              ) =>
                 track.stop()
             );
 
           if (
-            audioBlob.size === 0
+            audioBlob.size ===
+            0
           ) {
             showError(
               "The recording was empty. Please try again."
@@ -2145,7 +2287,8 @@ async function startRecording() {
           }
 
           await transcribeAudio(
-            audioBlob
+            audioBlob,
+            lastRecordingSeconds
           );
         } catch (error) {
           console.error(
@@ -2167,6 +2310,9 @@ async function startRecording() {
     mediaRecorder.start();
 
     recordingSeconds =
+      0;
+
+    lastRecordingSeconds =
       0;
 
     timer.textContent =
@@ -2240,6 +2386,12 @@ function stopRecording() {
     return;
   }
 
+  lastRecordingSeconds =
+    Math.max(
+      1,
+      recordingSeconds
+    );
+
   mediaRecorder.stop();
 
   if (
@@ -2283,7 +2435,9 @@ function stopRecording() {
 
 authForm.addEventListener(
   "submit",
-  async (event) => {
+  async (
+    event
+  ) => {
     event.preventDefault();
 
     const email =
@@ -2309,9 +2463,11 @@ authForm.addEventListener(
         true;
 
       authButton.textContent =
-        "Entering...";
+        "Entering workspace...";
 
-      setAuthMessage("");
+      setAuthMessage(
+        ""
+      );
 
       const session =
         await window.voiceToNotionAuth.signInWithPassword(
@@ -2405,7 +2561,9 @@ logoutButton.addEventListener(
 notionDatabaseSelect.addEventListener(
   "change",
   () => {
-    setDestinationMessage("");
+    setDestinationMessage(
+      ""
+    );
 
     updateDestinationButton();
 
@@ -2535,7 +2693,7 @@ dueDateInput.addEventListener(
 );
 
 /* =========================================================
-   THEME EVENT
+   THEME
    ========================================================= */
 
 themeToggle.addEventListener(

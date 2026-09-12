@@ -1,56 +1,136 @@
 import OpenAI from "openai";
+
 import { z } from "zod";
-import { zodTextFormat } from "openai/helpers/zod";
-import { NextResponse } from "next/server";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import {
+  zodTextFormat,
+} from "openai/helpers/zod";
 
-const ALLOWED_CATEGORIES = [
-  "Work",
-  "Personal",
-  "Study",
-  "Health",
-  "Finance",
-  "Meeting",
-  "Idea",
-  "Task",
-  "Shopping",
-  "Travel",
-  "Research",
-  "Reminder",
-  "Other",
-] as const;
+import {
+  NextResponse,
+} from "next/server";
 
-const CapturedNoteSchema = z.object({
-  title: z.string(),
-  summary: z.string(),
-  actionItems: z.array(z.string()),
-  category: z.enum(ALLOWED_CATEGORIES),
-  priority: z.enum([
-    "Low",
-    "Medium",
-    "High",
-  ]),
-  dueDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
-});
+import {
+  getAuthenticatedUser,
+  incrementMonthlyUsage,
+} from "@/lib/usage";
+
+/* =========================================================
+   OPENAI
+   ========================================================= */
+
+const openai =
+  new OpenAI({
+    apiKey:
+      process.env
+        .OPENAI_API_KEY,
+  });
+
+/* =========================================================
+   CATEGORIES
+   ========================================================= */
+
+const ALLOWED_CATEGORIES =
+  [
+    "Work",
+    "Personal",
+    "Study",
+    "Health",
+    "Finance",
+    "Meeting",
+    "Idea",
+    "Task",
+    "Shopping",
+    "Travel",
+    "Research",
+    "Reminder",
+    "Other",
+  ] as const;
+
+/* =========================================================
+   STRUCTURED OUTPUT
+   ========================================================= */
+
+const CapturedNoteSchema =
+  z.object({
+    title:
+      z.string(),
+
+    summary:
+      z.string(),
+
+    actionItems:
+      z.array(
+        z.string()
+      ),
+
+    category:
+      z.enum(
+        ALLOWED_CATEGORIES
+      ),
+
+    priority:
+      z.enum([
+        "Low",
+        "Medium",
+        "High",
+      ]),
+
+    dueDate:
+      z
+        .string()
+        .regex(
+          /^\d{4}-\d{2}-\d{2}$/
+        )
+        .nullable(),
+  });
+
+/* =========================================================
+   POST
+   ========================================================= */
 
 export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
+    /* =====================================================
+       AUTH
+       ===================================================== */
+
+    const user =
+      await getAuthenticatedUser(
+        request
+      );
+
+    if (
+      !user
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Authentication required.",
+        },
+        {
+          status:
+            401,
+        }
+      );
+    }
+
+    /* =====================================================
+       BODY
+       ===================================================== */
+
+    const body =
+      await request.json();
 
     const transcript =
       body.transcript;
 
     if (
       !transcript ||
-      typeof transcript !== "string"
+      typeof transcript !==
+        "string"
     ) {
       return NextResponse.json(
         {
@@ -58,17 +138,43 @@ export async function POST(
             "Transcript is required.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
+    const cleanTranscript =
+      transcript.trim();
+
+    if (
+      !cleanTranscript
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Transcript is empty.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
+    /* =====================================================
+       MOCK MODE
+       ===================================================== */
+
     const useMockAI =
-      process.env.USE_MOCK_AI ===
+      process.env
+        .USE_MOCK_AI ===
       "true";
 
-    if (useMockAI) {
-      return NextResponse.json({
+    if (
+      useMockAI
+    ) {
+      const mockNote = {
         title:
           "Finish Voice to Notion project",
 
@@ -80,21 +186,54 @@ export async function POST(
           "Prepare the product for launch",
         ],
 
-        category: "Work",
-        priority: "High",
-        dueDate: "2026-09-11",
-        mock: true,
-      });
+        category:
+          "Work",
+
+        priority:
+          "High",
+
+        dueDate:
+          "2026-09-11",
+
+        mock:
+          true,
+      };
+
+      /*
+        AI captures are our primary
+        SaaS usage metric.
+
+        Only increment after a
+        successful structured result.
+      */
+
+      await incrementMonthlyUsage(
+        user.id,
+        "ai_captures",
+        1
+      );
+
+      return NextResponse.json(
+        mockNote
+      );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    /* =====================================================
+       OPENAI CONFIG
+       ===================================================== */
+
+    if (
+      !process.env
+        .OPENAI_API_KEY
+    ) {
       return NextResponse.json(
         {
           error:
             "OPENAI_API_KEY is missing.",
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
@@ -102,17 +241,26 @@ export async function POST(
     const currentDate =
       new Date()
         .toISOString()
-        .split("T")[0];
+        .split(
+          "T"
+        )[0];
+
+    /* =====================================================
+       AI
+       ===================================================== */
 
     const response =
-      await openai.responses.parse({
-        model: "gpt-5.4-mini",
+      await openai.responses.parse(
+        {
+          model:
+            "gpt-5.4-mini",
 
-        input: [
-          {
-            role: "system",
+          input: [
+            {
+              role:
+                "system",
 
-            content: `
+              content: `
 You convert raw voice notes into structured productivity notes.
 
 The current date is ${currentDate}.
@@ -307,41 +455,70 @@ IMPORTANT:
 - support a wide variety of normal voice notes
 - not every capture needs action items
 - not every capture needs a due date
-            `,
-          },
+              `,
+            },
 
-          {
-            role: "user",
-            content: transcript,
-          },
-        ],
+            {
+              role:
+                "user",
 
-        text: {
-          format: zodTextFormat(
-            CapturedNoteSchema,
-            "captured_note"
-          ),
-        },
-      });
+              content:
+                cleanTranscript,
+            },
+          ],
+
+          text: {
+            format:
+              zodTextFormat(
+                CapturedNoteSchema,
+                "captured_note"
+              ),
+          },
+        }
+      );
 
     const note =
       response.output_parsed;
 
-    if (!note) {
+    if (
+      !note
+    ) {
       return NextResponse.json(
         {
           error:
             "Could not structure note.",
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
 
+    /* =====================================================
+       USAGE
+
+       This is our main billable metric.
+
+       A capture counts ONLY after
+       successful AI structuring.
+       ===================================================== */
+
+    await incrementMonthlyUsage(
+      user.id,
+      "ai_captures",
+      1
+    );
+
+    /* =====================================================
+       RESPONSE
+       ===================================================== */
+
     return NextResponse.json({
       ...note,
-      mock: false,
+
+      mock:
+        false,
     });
   } catch (error) {
     console.error(
@@ -350,8 +527,10 @@ IMPORTANT:
     );
 
     if (
-      error instanceof OpenAI.APIError &&
-      error.status === 429
+      error instanceof
+        OpenAI.APIError &&
+      error.status ===
+        429
     ) {
       return NextResponse.json(
         {
@@ -359,14 +538,17 @@ IMPORTANT:
             "OpenAI API credits are unavailable or the rate limit was reached.",
         },
         {
-          status: 429,
+          status:
+            429,
         }
       );
     }
 
     if (
-      error instanceof OpenAI.APIError &&
-      error.status === 401
+      error instanceof
+        OpenAI.APIError &&
+      error.status ===
+        401
     ) {
       return NextResponse.json(
         {
@@ -374,7 +556,26 @@ IMPORTANT:
             "OpenAI API authentication failed.",
         },
         {
-          status: 401,
+          status:
+            401,
+        }
+      );
+    }
+
+    if (
+      error instanceof
+        Error &&
+      error.message ===
+        "Could not update usage."
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "The note was structured, but usage tracking failed. Please try again.",
+        },
+        {
+          status:
+            500,
         }
       );
     }
@@ -385,7 +586,8 @@ IMPORTANT:
           "Failed to structure note.",
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
