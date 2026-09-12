@@ -84,6 +84,28 @@ type NotionDatabaseSelectionResponse = {
   error?: string;
 };
 
+type UsageSummary = {
+  periodStart: string;
+  periodEnd: string;
+
+  aiCaptures: number;
+  transcriptions: number;
+  notionSaves: number;
+  transcriptionSeconds: number;
+
+  aiCaptureLimit: number;
+  aiCapturesRemaining: number;
+
+  percentageUsed: number;
+};
+
+type UsageResponse = {
+  success: boolean;
+  plan?: string;
+  usage?: UsageSummary;
+  error?: string;
+};
+
 const HISTORY_STORAGE_KEY =
   "voice-to-notion-history";
 
@@ -245,6 +267,32 @@ export default function Home() {
   ] =
     useState("");
 
+  const [
+    usage,
+    setUsage,
+  ] =
+    useState<UsageSummary | null>(
+      null
+    );
+
+  const [
+    usagePlan,
+    setUsagePlan,
+  ] =
+    useState("free");
+
+  const [
+    usageLoading,
+    setUsageLoading,
+  ] =
+    useState(true);
+
+  const [
+    usageError,
+    setUsageError,
+  ] =
+    useState("");
+
   const mediaRecorderRef =
     useRef<MediaRecorder | null>(
       null
@@ -278,7 +326,7 @@ export default function Home() {
     savedDataSourceId;
 
   /* =========================================================
-     AUTH
+     INITIAL ACCOUNT
      ========================================================= */
 
   useEffect(() => {
@@ -376,11 +424,12 @@ export default function Home() {
   ]);
 
   /* =========================================================
-     NOTION
+     INITIAL DATA
      ========================================================= */
 
   useEffect(() => {
     loadNotionDatabases();
+    loadUsage();
   }, []);
 
   /* =========================================================
@@ -463,6 +512,97 @@ export default function Home() {
       setSigningOut(
         false
       );
+    }
+  }
+
+  /* =========================================================
+     USAGE
+     ========================================================= */
+
+  async function loadUsage(
+    silent = false
+  ) {
+    if (
+      !silent
+    ) {
+      setUsageLoading(
+        true
+      );
+    }
+
+    setUsageError(
+      ""
+    );
+
+    try {
+      const accessToken =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/usage",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      const data =
+        (await response.json()) as UsageResponse;
+
+      if (
+        response.status ===
+        401
+      ) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
+
+      if (
+        !response.ok ||
+        !data.success ||
+        !data.usage
+      ) {
+        throw new Error(
+          data.error ||
+            "Could not load usage."
+        );
+      }
+
+      setUsage(
+        data.usage
+      );
+
+      setUsagePlan(
+        data.plan ||
+          "free"
+      );
+    } catch (err) {
+      console.error(
+        "USAGE LOAD ERROR:",
+        err
+      );
+
+      setUsageError(
+        err instanceof Error
+          ? err.message
+          : "Could not load usage."
+      );
+    } finally {
+      if (
+        !silent
+      ) {
+        setUsageLoading(
+          false
+        );
+      }
     }
   }
 
@@ -1010,8 +1150,7 @@ export default function Home() {
 
   async function transcribeBlob(
     blob: Blob,
-    durationSeconds:
-      number
+    durationSeconds: number
   ) {
     setProcessingStep(
       "transcribing"
@@ -1157,13 +1296,20 @@ export default function Home() {
       );
     }
 
-    return {
-      ...data,
+    const structuredNote: StructuredNote =
+      {
+        ...data,
 
-      priority:
-        data.priority ??
-        "Low",
-    };
+        priority:
+          data.priority ??
+          "Low",
+      };
+
+    await loadUsage(
+      true
+    );
+
+    return structuredNote;
   }
 
   async function processRecording(
@@ -1636,6 +1782,31 @@ export default function Home() {
     )}`;
   }
 
+  function formatUsageResetDate(
+    periodEnd: string
+  ) {
+    const date =
+      new Date(
+        `${periodEnd}T00:00:00Z`
+      );
+
+    return new Intl.DateTimeFormat(
+      "en",
+      {
+        month:
+          "short",
+
+        day:
+          "numeric",
+
+        timeZone:
+          "UTC",
+      }
+    ).format(
+      date
+    );
+  }
+
   function systemLabel() {
     if (
       isRecording
@@ -1688,6 +1859,10 @@ export default function Home() {
         <div className="vtn-orb vtn-orb-cyan" />
 
         <div className="vtn-container pb-28 pt-4 md:pb-20 md:pt-5">
+
+          {/* =================================================
+              HUD
+          ================================================== */}
 
           <header className="vtn-mobile-hud sticky top-3 z-50 mb-6">
 
@@ -1745,6 +1920,10 @@ export default function Home() {
 
           </header>
 
+          {/* =================================================
+              MOBILE HERO
+          ================================================== */}
+
           <section className="vtn-mobile-hero mb-5 text-center md:hidden">
 
             <div className="vtn-eyebrow mb-3">
@@ -1766,6 +1945,10 @@ export default function Home() {
             </p>
 
           </section>
+
+          {/* =================================================
+              DESKTOP HERO
+          ================================================== */}
 
           <section className="mb-8 hidden md:block">
 
@@ -1789,9 +1972,174 @@ export default function Home() {
 
           </section>
 
+          {/* =================================================
+              LIVE USAGE
+          ================================================== */}
+
+          <section className="vtn-card mb-5 p-4 sm:p-5">
+
+            <div className="relative z-10">
+
+              <div className="flex items-start justify-between gap-4">
+
+                <div>
+
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.17em] text-[var(--muted)]">
+                    Monthly Usage
+                  </span>
+
+                  <div className="mt-1 flex items-center gap-2">
+
+                    <h2 className="text-base font-semibold">
+                      AI Captures
+                    </h2>
+
+                    <span className="vtn-badge px-2 py-1 text-[8px] uppercase">
+                      {usagePlan}
+                    </span>
+
+                  </div>
+
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    loadUsage()
+                  }
+                  disabled={
+                    usageLoading
+                  }
+                  className="vtn-secondary flex min-h-9 min-w-9 items-center justify-center px-2 text-xs"
+                  aria-label="Refresh usage"
+                  title="Refresh usage"
+                >
+                  {usageLoading
+                    ? "..."
+                    : "↻"}
+                </button>
+
+              </div>
+
+              {usageLoading ? (
+                <div className="mt-4">
+
+                  <div className="h-3 w-36 animate-pulse rounded-full bg-[var(--surface-soft)]" />
+
+                  <div className="mt-3 h-2 w-full animate-pulse rounded-full bg-[var(--surface-soft)]" />
+
+                </div>
+              ) : usageError ? (
+                <div className="vtn-error mt-4 rounded-xl p-3 text-xs">
+                  {usageError}
+                </div>
+              ) : usage ? (
+                <>
+
+                  <div className="mt-4 flex items-end justify-between gap-4">
+
+                    <div>
+
+                      <p className="text-2xl font-bold tracking-[-0.04em]">
+                        {usage.aiCaptures}
+
+                        <span className="ml-1 text-sm font-medium text-[var(--muted)]">
+                          / {usage.aiCaptureLimit}
+                        </span>
+                      </p>
+
+                      <p className="mt-1 text-[10px] text-[var(--muted)]">
+                        {usage.aiCapturesRemaining} captures remaining
+                      </p>
+
+                    </div>
+
+                    <div className="text-right">
+
+                      <p className="text-xs font-semibold">
+                        {usage.percentageUsed}%
+                      </p>
+
+                      <p className="mt-1 text-[9px] text-[var(--muted)]">
+                        Resets {formatUsageResetDate(
+                          usage.periodEnd
+                        )}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                  <div className="mt-3 h-2.5 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface-soft)]">
+
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-400 transition-[width] duration-500"
+                      style={{
+                        width:
+                          `${usage.percentageUsed}%`,
+                      }}
+                    />
+
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-3">
+
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Transcriptions
+                      </span>
+
+                      <p className="mt-1 text-sm font-bold">
+                        {usage.transcriptions}
+                      </p>
+
+                    </div>
+
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-3">
+
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Voice Time
+                      </span>
+
+                      <p className="mt-1 text-sm font-bold">
+                        {usage.transcriptionSeconds}s
+                      </p>
+
+                    </div>
+
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-3">
+
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Notion Saves
+                      </span>
+
+                      <p className="mt-1 text-sm font-bold">
+                        {usage.notionSaves}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </>
+              ) : null}
+
+            </div>
+
+          </section>
+
+          {/* =================================================
+              MAIN GRID
+          ================================================== */}
+
           <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
 
             <aside className="space-y-5">
+
+              {/* =============================================
+                  VOICE
+              ============================================== */}
 
               <section
                 className={`vtn-card vtn-mobile-voice-card p-5 sm:p-6 ${
@@ -1979,6 +2327,10 @@ export default function Home() {
 
               </section>
 
+              {/* =============================================
+                  NOTION DESTINATION
+              ============================================== */}
+
               <section className="vtn-card vtn-mobile-destination p-4 sm:p-5">
 
                 <div className="relative z-10">
@@ -2136,6 +2488,10 @@ export default function Home() {
               </section>
 
             </aside>
+
+            {/* =================================================
+                WORKSPACE
+            ================================================== */}
 
             <section className="vtn-card vtn-mobile-workspace p-4 sm:p-6">
 
@@ -2600,6 +2956,10 @@ export default function Home() {
 
           </div>
 
+          {/* =================================================
+              HISTORY
+          ================================================== */}
+
           <section className="vtn-card mt-5 p-4 sm:p-6">
 
             <div className="relative z-10">
@@ -2726,6 +3086,10 @@ export default function Home() {
           )}
 
         </div>
+
+        {/* =================================================
+            MOBILE STICKY SAVE
+        ================================================== */}
 
         {note && (
           <div className="vtn-mobile-bottom-action md:hidden">

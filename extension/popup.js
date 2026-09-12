@@ -69,6 +69,80 @@ const appContent =
   );
 
 /* =========================================================
+   USAGE
+   ========================================================= */
+
+const usagePlan =
+  document.getElementById(
+    "usagePlan"
+  );
+
+const refreshUsageButton =
+  document.getElementById(
+    "refreshUsageButton"
+  );
+
+const usageLoading =
+  document.getElementById(
+    "usageLoading"
+  );
+
+const usageContent =
+  document.getElementById(
+    "usageContent"
+  );
+
+const usageCurrent =
+  document.getElementById(
+    "usageCurrent"
+  );
+
+const usageLimit =
+  document.getElementById(
+    "usageLimit"
+  );
+
+const usageRemaining =
+  document.getElementById(
+    "usageRemaining"
+  );
+
+const usagePercentage =
+  document.getElementById(
+    "usagePercentage"
+  );
+
+const usageReset =
+  document.getElementById(
+    "usageReset"
+  );
+
+const usageProgressBar =
+  document.getElementById(
+    "usageProgressBar"
+  );
+
+const usageTranscriptions =
+  document.getElementById(
+    "usageTranscriptions"
+  );
+
+const usageVoiceTime =
+  document.getElementById(
+    "usageVoiceTime"
+  );
+
+const usageNotionSaves =
+  document.getElementById(
+    "usageNotionSaves"
+  );
+
+const usageMessage =
+  document.getElementById(
+    "usageMessage"
+  );
+
+/* =========================================================
    THEME / SYSTEM
    ========================================================= */
 
@@ -330,14 +404,11 @@ async function initializeTheme() {
         THEME_STORAGE_KEY
       ];
 
-    const theme =
-      savedTheme ===
-      "light"
-        ? "light"
-        : "dark";
-
     applyTheme(
-      theme
+      savedTheme ===
+        "light"
+        ? "light"
+        : "dark"
     );
   } catch (error) {
     console.warn(
@@ -377,17 +448,45 @@ async function toggleTheme() {
     nextTheme
   );
 
-  try {
-    await chrome.storage.local.set({
-      [THEME_STORAGE_KEY]:
-        nextTheme,
-    });
-  } catch (error) {
-    console.warn(
-      "THEME SAVE ERROR:",
-      error
+  await chrome.storage.local.set({
+    [THEME_STORAGE_KEY]:
+      nextTheme,
+  });
+}
+
+/* =========================================================
+   JSON RESPONSE
+   ========================================================= */
+
+async function readJsonResponse(
+  response,
+  label
+) {
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) ||
+    "";
+
+  if (
+    !contentType.includes(
+      "application/json"
+    )
+  ) {
+    const text =
+      await response.text();
+
+    console.error(
+      `${label} NON-JSON RESPONSE:`,
+      text
+    );
+
+    throw new Error(
+      `Server returned ${response.status} instead of JSON.`
     );
   }
+
+  return response.json();
 }
 
 /* =========================================================
@@ -413,11 +512,7 @@ function setSystemState(
     systemDot.classList.add(
       "recording"
     );
-
-    return;
-  }
-
-  if (
+  } else if (
     state ===
     "busy"
   ) {
@@ -465,11 +560,6 @@ function setVoiceState(
       "active"
     );
 
-    recordButton.setAttribute(
-      "aria-label",
-      "Stop recording"
-    );
-
     statusText.textContent =
       "Listening...";
 
@@ -484,11 +574,6 @@ function setVoiceState(
     return;
   }
 
-  recordButton.setAttribute(
-    "aria-label",
-    "Start recording"
-  );
-
   if (
     state ===
     "transcribing"
@@ -499,15 +584,8 @@ function setVoiceState(
     processingText.textContent =
       "Transcribing voice";
 
-    transcriptShell.classList.add(
-      "processing"
-    );
-
     statusText.textContent =
       "Transcribing";
-
-    voiceSubstatus.textContent =
-      "Turning your recording into text.";
 
     setSystemState(
       "busy",
@@ -527,15 +605,8 @@ function setVoiceState(
     processingText.textContent =
       "AI Structuring";
 
-    transcriptShell.classList.add(
-      "processing"
-    );
-
     statusText.textContent =
       "AI Structuring";
-
-    voiceSubstatus.textContent =
-      "Organizing title, summary, actions, category, priority and due date.";
 
     setSystemState(
       "busy",
@@ -557,9 +628,6 @@ function setVoiceState(
 
     statusText.textContent =
       "Syncing";
-
-    voiceSubstatus.textContent =
-      "Sending your structured note to Notion.";
 
     setSystemState(
       "busy",
@@ -594,9 +662,6 @@ function setVoiceState(
     statusText.textContent =
       "Note ready";
 
-    voiceSubstatus.textContent =
-      "Review your structured note or send it to Notion.";
-
     setSystemState(
       "ready",
       "Note Ready"
@@ -614,36 +679,6 @@ function setVoiceState(
   setSystemState(
     "ready",
     "System Ready"
-  );
-}
-
-function updateTranscriptCount() {
-  const count =
-    transcriptBox.value.length;
-
-  transcriptCount.textContent =
-    `${count} ${
-      count ===
-      1
-        ? "character"
-        : "characters"
-    }`;
-}
-
-/* =========================================================
-   PRIORITY
-   ========================================================= */
-
-function updatePriorityAppearance() {
-  if (
-    !priorityInput
-  ) {
-    return;
-  }
-
-  priorityInput.setAttribute(
-    "value",
-    priorityInput.value
   );
 }
 
@@ -684,11 +719,6 @@ function setAppAuthenticated(
   appContent.hidden =
     !isAuthenticated;
 
-  accountCard.classList.toggle(
-    "signed-in",
-    isAuthenticated
-  );
-
   if (
     isAuthenticated
   ) {
@@ -701,31 +731,16 @@ function setAppAuthenticated(
 
     profileInitial.textContent =
       cleanEmail
-        .charAt(
-          0
-        )
+        .charAt(0)
         .toUpperCase();
 
-    setAuthMessage(
-      ""
-    );
+    setAuthMessage("");
   }
 }
 
 async function requireAuthSession() {
-  const auth =
-    window.voiceToNotionAuth;
-
-  if (
-    !auth
-  ) {
-    throw new Error(
-      "Extension authentication is not available."
-    );
-  }
-
   const session =
-    await auth.getValidAuthSession();
+    await window.voiceToNotionAuth.getValidAuthSession();
 
   if (
     !session ||
@@ -736,135 +751,201 @@ async function requireAuthSession() {
     );
 
     throw new Error(
-      "Please log in to Voice to Notion first."
+      "Please log in first."
     );
   }
 
   return session;
 }
 
-function handleAuthFailure(
-  error
+/* =========================================================
+   USAGE
+   ========================================================= */
+
+function setUsageMessage(
+  message,
+  isError = false
 ) {
-  if (
-    error?.code !==
-      "AUTH_REQUIRED" &&
-    error?.code !==
-      "AUTH_EXPIRED"
-  ) {
-    return false;
-  }
+  usageMessage.textContent =
+    message ||
+    "";
 
-  setAppAuthenticated(
-    false
+  usageMessage.hidden =
+    !message;
+
+  usageMessage.classList.toggle(
+    "usage-error",
+    isError
   );
-
-  resetNotionDestinationUI();
-
-  resetCaptureUI();
-
-  setAuthMessage(
-    error.message ||
-      "Your session expired. Please log in again.",
-    true
-  );
-
-  return true;
 }
 
-async function initializeAuth() {
-  try {
-    const auth =
-      window.voiceToNotionAuth;
-
-    if (
-      !auth
-    ) {
-      throw new Error(
-        "Extension authentication failed to load."
-      );
-    }
-
-    const session =
-      await auth.getValidAuthSession();
-
-    if (
-      !session
-    ) {
-      setAppAuthenticated(
-        false
-      );
-
-      return;
-    }
-
-    setAppAuthenticated(
-      true,
-      session.user?.email ||
-        ""
+function formatUsageResetDate(
+  periodEnd
+) {
+  const date =
+    new Date(
+      `${periodEnd}T00:00:00Z`
     );
 
-    await loadNotionDestination();
+  return new Intl.DateTimeFormat(
+    "en",
+    {
+      month:
+        "short",
+
+      day:
+        "numeric",
+
+      timeZone:
+        "UTC",
+    }
+  ).format(
+    date
+  );
+}
+
+function formatVoiceTime(
+  seconds
+) {
+  if (
+    seconds <
+    60
+  ) {
+    return `${seconds}s`;
+  }
+
+  const minutes =
+    Math.floor(
+      seconds /
+        60
+    );
+
+  const remaining =
+    seconds %
+    60;
+
+  return remaining
+    ? `${minutes}m ${remaining}s`
+    : `${minutes}m`;
+}
+
+async function loadUsage(
+  silent = false
+) {
+  if (
+    !silent
+  ) {
+    usageLoading.hidden =
+      false;
+
+    usageContent.hidden =
+      true;
+  }
+
+  refreshUsageButton.disabled =
+    true;
+
+  setUsageMessage("");
+
+  try {
+    const response =
+      await window.voiceToNotionAuth.authenticatedFetch(
+        `${API_BASE_URL}/api/usage`,
+        {
+          method:
+            "GET",
+        }
+      );
+
+    const data =
+      await readJsonResponse(
+        response,
+        "USAGE"
+      );
+
+    if (
+      !response.ok ||
+      !data.success ||
+      !data.usage
+    ) {
+      throw new Error(
+        data.error ||
+          "Could not load usage."
+      );
+    }
+
+    const usage =
+      data.usage;
+
+    usagePlan.textContent =
+      (
+        data.plan ||
+        "free"
+      ).toUpperCase();
+
+    usageCurrent.textContent =
+      String(
+        usage.aiCaptures
+      );
+
+    usageLimit.textContent =
+      String(
+        usage.aiCaptureLimit
+      );
+
+    usageRemaining.textContent =
+      `${usage.aiCapturesRemaining} captures remaining`;
+
+    usagePercentage.textContent =
+      `${usage.percentageUsed}%`;
+
+    usageReset.textContent =
+      `Resets ${formatUsageResetDate(
+        usage.periodEnd
+      )}`;
+
+    usageProgressBar.style.width =
+      `${usage.percentageUsed}%`;
+
+    usageTranscriptions.textContent =
+      String(
+        usage.transcriptions
+      );
+
+    usageVoiceTime.textContent =
+      formatVoiceTime(
+        usage.transcriptionSeconds
+      );
+
+    usageNotionSaves.textContent =
+      String(
+        usage.notionSaves
+      );
+
+    usageLoading.hidden =
+      true;
+
+    usageContent.hidden =
+      false;
   } catch (error) {
     console.error(
-      "AUTH INITIALIZATION ERROR:",
+      "USAGE LOAD ERROR:",
       error
     );
 
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
-    }
+    usageLoading.hidden =
+      true;
 
-    setAppAuthenticated(
-      false
-    );
-
-    setAuthMessage(
+    setUsageMessage(
       error instanceof Error
         ? error.message
-        : "Could not load your session.",
+        : "Could not load usage.",
       true
     );
+  } finally {
+    refreshUsageButton.disabled =
+      false;
   }
-}
-
-/* =========================================================
-   JSON RESPONSE
-   ========================================================= */
-
-async function readJsonResponse(
-  response,
-  label
-) {
-  const contentType =
-    response.headers.get(
-      "content-type"
-    ) ||
-    "";
-
-  if (
-    !contentType.includes(
-      "application/json"
-    )
-  ) {
-    const text =
-      await response.text();
-
-    console.error(
-      `${label} NON-JSON RESPONSE:`,
-      text
-    );
-
-    throw new Error(
-      `Server returned ${response.status} instead of JSON.`
-    );
-  }
-
-  return response.json();
 }
 
 /* =========================================================
@@ -888,9 +969,47 @@ function setDestinationMessage(
   );
 }
 
-function resetNotionDestinationUI() {
+async function loadNotionDestination() {
+  const response =
+    await window.voiceToNotionAuth.authenticatedFetch(
+      `${API_BASE_URL}/api/notion/databases`,
+      {
+        method:
+          "GET",
+      }
+    );
+
+  const data =
+    await readJsonResponse(
+      response,
+      "NOTION DATABASE"
+    );
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      data.error ||
+        "Could not load Notion."
+    );
+  }
+
+  notionDestinationLoading.hidden =
+    true;
+
+  notionDestinationContent.hidden =
+    false;
+
+  notionConnectionBadge.textContent =
+    "Connected";
+
+  notionConnectionBadge.classList.add(
+    "connected"
+  );
+
   notionWorkspaceName.textContent =
-    "";
+    data.workspace?.name ||
+    "Notion workspace";
 
   notionDatabaseSelect.innerHTML =
     `
@@ -899,216 +1018,38 @@ function resetNotionDestinationUI() {
       </option>
     `;
 
-  notionDestinationContent.hidden =
-    true;
+  const dataSources =
+    Array.isArray(
+      data.dataSources
+    )
+      ? data.dataSources
+      : [];
 
-  notionDestinationLoading.hidden =
-    false;
+  dataSources.forEach(
+    (source) => {
+      const option =
+        document.createElement(
+          "option"
+        );
 
-  notionDestinationLoading.textContent =
-    "Loading your Notion workspace...";
+      option.value =
+        source.id;
 
-  notionConnectionBadge.textContent =
-    "Loading";
+      option.textContent =
+        source.name;
 
-  notionConnectionBadge.classList.remove(
-    "connected",
-    "error"
+      notionDatabaseSelect.appendChild(
+        option
+      );
+    }
   );
 
   savedDestinationId =
+    data.selectedDataSourceId ||
     "";
 
-  setDestinationMessage(
-    ""
-  );
-}
-
-function updateDestinationButton() {
-  const selectedId =
-    notionDatabaseSelect.value;
-
-  const changed =
-    selectedId !==
+  notionDatabaseSelect.value =
     savedDestinationId;
-
-  saveDestinationButton.disabled =
-    !selectedId ||
-    !changed;
-
-  saveDestinationButton.textContent =
-    changed
-      ? "Sync Destination"
-      : "Destination Synced";
-}
-
-async function loadNotionDestination() {
-  resetNotionDestinationUI();
-
-  try {
-    const response =
-      await window.voiceToNotionAuth.authenticatedFetch(
-        `${API_BASE_URL}/api/notion/databases`,
-        {
-          method:
-            "GET",
-        }
-      );
-
-    const data =
-      await readJsonResponse(
-        response,
-        "NOTION DATABASE"
-      );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        data.error ||
-          "Could not load your Notion destination."
-      );
-    }
-
-    if (
-      data.connected ===
-      false
-    ) {
-      notionDestinationLoading.hidden =
-        true;
-
-      notionConnectionBadge.textContent =
-        "Offline";
-
-      notionConnectionBadge.classList.add(
-        "error"
-      );
-
-      setDestinationMessage(
-        "Connect Notion from the web app first.",
-        true
-      );
-
-      return;
-    }
-
-    notionConnectionBadge.textContent =
-      "Connected";
-
-    notionConnectionBadge.classList.add(
-      "connected"
-    );
-
-    notionWorkspaceName.textContent =
-      data.workspace?.name ||
-      "Notion workspace";
-
-    const dataSources =
-      Array.isArray(
-        data.dataSources
-      )
-        ? data.dataSources
-        : [];
-
-    notionDatabaseSelect.innerHTML =
-      `
-        <option value="">
-          Select database...
-        </option>
-      `;
-
-    dataSources.forEach(
-      (
-        source
-      ) => {
-        const option =
-          document.createElement(
-            "option"
-          );
-
-        option.value =
-          source.id;
-
-        option.textContent =
-          source.name ||
-          "Untitled";
-
-        notionDatabaseSelect.appendChild(
-          option
-        );
-      }
-    );
-
-    savedDestinationId =
-      data.selectedDataSourceId ||
-      "";
-
-    const selectionExists =
-      dataSources.some(
-        (
-          source
-        ) =>
-          source.id ===
-          savedDestinationId
-      );
-
-    notionDatabaseSelect.value =
-      selectionExists
-        ? savedDestinationId
-        : "";
-
-    notionDestinationLoading.hidden =
-      true;
-
-    notionDestinationContent.hidden =
-      false;
-
-    updateDestinationButton();
-
-    if (
-      dataSources.length ===
-      0
-    ) {
-      setDestinationMessage(
-        "No accessible Notion databases were found.",
-        true
-      );
-    }
-  } catch (error) {
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
-    }
-
-    console.error(
-      "LOAD NOTION DESTINATION ERROR:",
-      error
-    );
-
-    notionDestinationLoading.hidden =
-      true;
-
-    notionConnectionBadge.textContent =
-      "Error";
-
-    notionConnectionBadge.classList.remove(
-      "connected"
-    );
-
-    notionConnectionBadge.classList.add(
-      "error"
-    );
-
-    setDestinationMessage(
-      error instanceof Error
-        ? error.message
-        : "Could not load your Notion destination.",
-      true
-    );
-  }
 }
 
 async function saveNotionDestinationSelection() {
@@ -1118,96 +1059,53 @@ async function saveNotionDestinationSelection() {
   if (
     !dataSourceId
   ) {
-    setDestinationMessage(
-      "Choose a database first.",
-      true
-    );
-
     return;
   }
 
-  try {
-    saveDestinationButton.disabled =
-      true;
+  const response =
+    await window.voiceToNotionAuth.authenticatedFetch(
+      `${API_BASE_URL}/api/notion/database/select`,
+      {
+        method:
+          "POST",
 
-    saveDestinationButton.textContent =
-      "Syncing...";
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
 
-    setDestinationMessage(
-      ""
+        body:
+          JSON.stringify({
+            dataSourceId,
+          }),
+      }
     );
 
-    const response =
-      await window.voiceToNotionAuth.authenticatedFetch(
-        `${API_BASE_URL}/api/notion/database/select`,
-        {
-          method:
-            "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body:
-            JSON.stringify({
-              dataSourceId,
-            }),
-        }
-      );
-
-    const data =
-      await readJsonResponse(
-        response,
-        "DESTINATION SAVE"
-      );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        data.error ||
-          "Could not save the Notion destination."
-      );
-    }
-
-    savedDestinationId =
-      dataSourceId;
-
-    updateDestinationButton();
-
-    setDestinationMessage(
-      "Destination synchronized."
+  const data =
+    await readJsonResponse(
+      response,
+      "DESTINATION"
     );
 
-    resetNotionState();
-  } catch (error) {
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
-    }
-
-    console.error(
-      "SAVE NOTION DESTINATION ERROR:",
-      error
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      data.error ||
+        "Could not save destination."
     );
-
-    setDestinationMessage(
-      error instanceof Error
-        ? error.message
-        : "Could not save the Notion destination.",
-      true
-    );
-
-    updateDestinationButton();
   }
+
+  savedDestinationId =
+    dataSourceId;
+
+  setDestinationMessage(
+    "Destination synchronized."
+  );
 }
 
 /* =========================================================
-   GENERAL UI
+   GENERAL HELPERS
    ========================================================= */
 
 function formatTime(
@@ -1219,7 +1117,7 @@ function formatTime(
         60
     );
 
-  const remainingSeconds =
+  const remaining =
     seconds %
     60;
 
@@ -1229,11 +1127,19 @@ function formatTime(
     2,
     "0"
   )}:${String(
-    remainingSeconds
+    remaining
   ).padStart(
     2,
     "0"
   )}`;
+}
+
+function updateTranscriptCount() {
+  const count =
+    transcriptBox.value.length;
+
+  transcriptCount.textContent =
+    `${count} characters`;
 }
 
 function showError(
@@ -1244,19 +1150,14 @@ function showError(
 
   errorBox.hidden =
     false;
-
-  setSystemState(
-    "busy",
-    "Attention"
-  );
 }
 
 function clearError() {
-  errorBox.textContent =
-    "";
-
   errorBox.hidden =
     true;
+
+  errorBox.textContent =
+    "";
 }
 
 function resetNotionState() {
@@ -1269,9 +1170,6 @@ function resetNotionState() {
   notionLink.hidden =
     true;
 
-  notionLink.href =
-    "#";
-
   saveButton.disabled =
     false;
 
@@ -1280,171 +1178,6 @@ function resetNotionState() {
       Send to Notion
       <span>→</span>
     `;
-}
-
-function setRecordButtonBusy(
-  isBusy
-) {
-  recordButton.disabled =
-    isBusy;
-}
-
-function setRestructureBusy(
-  isBusy
-) {
-  restructureButton.disabled =
-    isBusy;
-}
-
-function setSaveBusy(
-  isBusy
-) {
-  saveButton.disabled =
-    isBusy;
-
-  if (
-    isBusy
-  ) {
-    saveButton.textContent =
-      "Syncing...";
-  } else if (
-    notionSaved
-  ) {
-    saveButton.textContent =
-      "Synced ✓";
-  } else {
-    saveButton.innerHTML =
-      `
-        Send to Notion
-        <span>→</span>
-      `;
-  }
-}
-
-function resetCaptureUI() {
-  currentNote =
-    null;
-
-  resultSection.hidden =
-    true;
-
-  structuredSection.hidden =
-    true;
-
-  transcriptBox.value =
-    "";
-
-  titleInput.value =
-    "";
-
-  summaryInput.value =
-    "";
-
-  categoryInput.value =
-    "";
-
-  priorityInput.value =
-    "Low";
-
-  updatePriorityAppearance();
-
-  dueDateInput.value =
-    "";
-
-  actionItemsContainer.innerHTML =
-    "";
-
-  timer.textContent =
-    "00:00";
-
-  recordingSeconds =
-    0;
-
-  lastRecordingSeconds =
-    0;
-
-  waveform.classList.remove(
-    "active"
-  );
-
-  voiceCard.classList.remove(
-    "recording"
-  );
-
-  recordButton.classList.remove(
-    "recording"
-  );
-
-  transcriptShell.classList.remove(
-    "processing"
-  );
-
-  processingIndicator.hidden =
-    true;
-
-  if (
-    currentAudioUrl
-  ) {
-    URL.revokeObjectURL(
-      currentAudioUrl
-    );
-
-    currentAudioUrl =
-      null;
-  }
-
-  audioPlayer.pause();
-
-  audioPlayer.removeAttribute(
-    "src"
-  );
-
-  audioPlayer.load();
-
-  audioPlayer.hidden =
-    true;
-
-  resetNotionState();
-
-  clearError();
-
-  updateTranscriptCount();
-
-  setVoiceState(
-    "idle"
-  );
-}
-
-/* =========================================================
-   MICROPHONE PERMISSION
-   ========================================================= */
-
-async function checkMicrophonePermission() {
-  try {
-    const permission =
-      await navigator.permissions.query({
-        name:
-          "microphone",
-      });
-
-    return permission.state;
-  } catch (error) {
-    console.warn(
-      "Could not query microphone permission:",
-      error
-    );
-
-    return "unknown";
-  }
-}
-
-async function openMicrophonePermissionPage() {
-  await chrome.tabs.create({
-    url:
-      chrome.runtime.getURL(
-        "mic-permission.html"
-      ),
-  });
 }
 
 /* =========================================================
@@ -1469,17 +1202,11 @@ function renderActionItems(
     empty.textContent =
       "No action items detected.";
 
-    empty.style.margin =
-      "8px 0";
-
-    empty.style.color =
-      "var(--muted)";
-
     empty.style.fontSize =
       "10px";
 
-    empty.style.textAlign =
-      "center";
+    empty.style.color =
+      "var(--muted)";
 
     actionItemsContainer.appendChild(
       empty
@@ -1506,26 +1233,12 @@ function renderActionItems(
           "input"
         );
 
-      input.type =
-        "text";
-
       input.value =
         item;
 
-      input.placeholder =
-        "Action item";
-
       input.addEventListener(
         "input",
-        (
-          event
-        ) => {
-          if (
-            !currentNote
-          ) {
-            return;
-          }
-
+        (event) => {
           currentNote.actionItems[
             index
           ] =
@@ -1535,37 +1248,23 @@ function renderActionItems(
         }
       );
 
-      const removeButton =
+      const remove =
         document.createElement(
           "button"
         );
 
-      removeButton.type =
+      remove.type =
         "button";
 
-      removeButton.className =
+      remove.className =
         "remove-action-button";
 
-      removeButton.textContent =
+      remove.textContent =
         "×";
 
-      removeButton.title =
-        "Remove action item";
-
-      removeButton.setAttribute(
-        "aria-label",
-        "Remove action item"
-      );
-
-      removeButton.addEventListener(
+      remove.addEventListener(
         "click",
         () => {
-          if (
-            !currentNote
-          ) {
-            return;
-          }
-
           currentNote.actionItems.splice(
             index,
             1
@@ -1574,17 +1273,12 @@ function renderActionItems(
           renderActionItems(
             currentNote.actionItems
           );
-
-          resetNotionState();
         }
       );
 
-      row.appendChild(
-        input
-      );
-
-      row.appendChild(
-        removeButton
+      row.append(
+        input,
+        remove
       );
 
       actionItemsContainer.appendChild(
@@ -1624,14 +1318,8 @@ function populateStructuredNote(
       "Other",
 
     priority:
-      note.priority ===
-        "High" ||
-      note.priority ===
-        "Medium" ||
-      note.priority ===
-        "Low"
-        ? note.priority
-        : "Low",
+      note.priority ||
+      "Low",
 
     dueDate:
       note.dueDate ||
@@ -1649,8 +1337,6 @@ function populateStructuredNote(
 
   priorityInput.value =
     currentNote.priority;
-
-  updatePriorityAppearance();
 
   dueDateInput.value =
     currentNote.dueDate ||
@@ -1689,275 +1375,146 @@ function syncCurrentNoteFromInputs() {
     dueDateInput.value ||
     null;
 
-  updatePriorityAppearance();
-
   resetNotionState();
 }
 
 /* =========================================================
-   STRUCTURE TRANSCRIPT
+   STRUCTURE
    ========================================================= */
 
 async function structureTranscript(
   transcript
 ) {
-  try {
-    clearError();
+  clearError();
 
-    await requireAuthSession();
+  setVoiceState(
+    "structuring"
+  );
 
-    resetNotionState();
+  const response =
+    await window.voiceToNotionAuth.authenticatedFetch(
+      `${API_BASE_URL}/api/structure-note`,
+      {
+        method:
+          "POST",
 
-    structuredStatus.textContent =
-      "Working";
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
 
-    setVoiceState(
-      "structuring"
+        body:
+          JSON.stringify({
+            transcript,
+          }),
+      }
     );
 
-    setRestructureBusy(
-      true
+  const data =
+    await readJsonResponse(
+      response,
+      "STRUCTURE"
     );
 
-    const response =
-      await window.voiceToNotionAuth.authenticatedFetch(
-        `${API_BASE_URL}/api/structure-note`,
-        {
-          method:
-            "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body:
-            JSON.stringify({
-              transcript,
-            }),
-        }
-      );
-
-    const data =
-      await readJsonResponse(
-        response,
-        "STRUCTURE"
-      );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        data.error ||
-          "The structure request failed."
-      );
-    }
-
-    if (
-      !data.title
-    ) {
-      throw new Error(
-        "The server returned an invalid structured note."
-      );
-    }
-
-    populateStructuredNote(
-      data
-    );
-
-    structuredStatus.textContent =
-      "Ready";
-
-    setVoiceState(
-      "ready"
-    );
-  } catch (error) {
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
-    }
-
-    console.error(
-      "STRUCTURE ERROR:",
-      error
-    );
-
-    structuredStatus.textContent =
-      "Failed";
-
-    showError(
-      error instanceof Error
-        ? error.message
-        : "Could not structure the transcript."
-    );
-  } finally {
-    setRestructureBusy(
-      false
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      data.error ||
+        "Structure failed."
     );
   }
+
+  populateStructuredNote(
+    data
+  );
+
+  structuredStatus.textContent =
+    "Ready";
+
+  setVoiceState(
+    "ready"
+  );
+
+  await loadUsage(
+    true
+  );
 }
 
 /* =========================================================
-   TRANSCRIPTION
+   TRANSCRIBE
    ========================================================= */
 
 async function transcribeAudio(
   audioBlob,
   durationSeconds
 ) {
-  try {
-    clearError();
+  clearError();
 
-    await requireAuthSession();
+  setVoiceState(
+    "transcribing"
+  );
 
-    setRecordButtonBusy(
-      true
-    );
+  const formData =
+    new FormData();
 
-    transcriptStatus.textContent =
-      "Working";
+  formData.append(
+    "audio",
+    audioBlob,
+    "recording.webm"
+  );
 
-    setVoiceState(
-      "transcribing"
-    );
-
-    const formData =
-      new FormData();
-
-    let extension =
-      "webm";
-
-    if (
-      audioBlob.type.includes(
-        "ogg"
+  formData.append(
+    "durationSeconds",
+    String(
+      Math.max(
+        1,
+        durationSeconds
       )
-    ) {
-      extension =
-        "ogg";
-    }
+    )
+  );
 
-    if (
-      audioBlob.type.includes(
-        "mp4"
-      )
-    ) {
-      extension =
-        "mp4";
-    }
+  const response =
+    await window.voiceToNotionAuth.authenticatedFetch(
+      `${API_BASE_URL}/api/transcribe`,
+      {
+        method:
+          "POST",
 
-    if (
-      audioBlob.type.includes(
-        "mpeg"
-      )
-    ) {
-      extension =
-        "mp3";
-    }
-
-    formData.append(
-      "audio",
-      audioBlob,
-      `recording.${extension}`
+        body:
+          formData,
+      }
     );
 
-    formData.append(
-      "durationSeconds",
-      String(
-        Math.max(
-          1,
-          Math.round(
-            durationSeconds ||
-              1
-          )
-        )
-      )
+  const data =
+    await readJsonResponse(
+      response,
+      "TRANSCRIPTION"
     );
 
-    const response =
-      await window.voiceToNotionAuth.authenticatedFetch(
-        `${API_BASE_URL}/api/transcribe`,
-        {
-          method:
-            "POST",
-
-          body:
-            formData,
-        }
-      );
-
-    const data =
-      await readJsonResponse(
-        response,
-        "TRANSCRIPTION"
-      );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        data.error ||
-          "The transcription request failed."
-      );
-    }
-
-    if (
-      !data.transcript ||
-      typeof data.transcript !==
-        "string"
-    ) {
-      throw new Error(
-        "The server returned an empty transcript."
-      );
-    }
-
-    transcriptBox.value =
-      data.transcript;
-
-    updateTranscriptCount();
-
-    resultSection.hidden =
-      false;
-
-    transcriptStatus.textContent =
-      "Ready";
-
-    await structureTranscript(
-      data.transcript
-    );
-
-    return data.transcript;
-  } catch (error) {
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return null;
-    }
-
-    console.error(
-      "TRANSCRIPTION ERROR:",
-      error
-    );
-
-    transcriptStatus.textContent =
-      "Failed";
-
-    showError(
-      error instanceof Error
-        ? error.message
-        : "Could not transcribe the recording."
-    );
-
-    return null;
-  } finally {
-    setRecordButtonBusy(
-      false
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      data.error ||
+        "Transcription failed."
     );
   }
+
+  transcriptBox.value =
+    data.transcript;
+
+  updateTranscriptCount();
+
+  resultSection.hidden =
+    false;
+
+  transcriptStatus.textContent =
+    "Ready";
+
+  await structureTranscript(
+    data.transcript
+  );
 }
 
 /* =========================================================
@@ -1968,64 +1525,24 @@ async function saveToNotion() {
   if (
     !currentNote
   ) {
-    showError(
-      "There is no structured note to save."
-    );
-
     return;
   }
 
   syncCurrentNoteFromInputs();
 
-  if (
-    !currentNote.title.trim()
-  ) {
-    showError(
-      "The note needs a title before it can be saved."
-    );
+  clearError();
 
-    return;
-  }
+  setVoiceState(
+    "saving"
+  );
 
-  if (
-    !savedDestinationId
-  ) {
-    showError(
-      "Choose and sync a Notion destination first."
-    );
+  saveButton.disabled =
+    true;
 
-    return;
-  }
-
-  if (
-    notionSaved
-  ) {
-    return;
-  }
+  saveButton.textContent =
+    "Syncing...";
 
   try {
-    clearError();
-
-    setSaveBusy(
-      true
-    );
-
-    setVoiceState(
-      "saving"
-    );
-
-    const cleanActionItems =
-      currentNote.actionItems
-        .map(
-          (
-            item
-          ) =>
-            item.trim()
-        )
-        .filter(
-          Boolean
-        );
-
     const response =
       await window.voiceToNotionAuth.authenticatedFetch(
         `${API_BASE_URL}/api/notion/save`,
@@ -2041,16 +1558,16 @@ async function saveToNotion() {
           body:
             JSON.stringify({
               title:
-                currentNote.title.trim(),
+                currentNote.title,
 
               summary:
-                currentNote.summary.trim(),
+                currentNote.summary,
 
               actionItems:
-                cleanActionItems,
+                currentNote.actionItems,
 
               category:
-                currentNote.category.trim(),
+                currentNote.category,
 
               priority:
                 currentNote.priority,
@@ -2059,7 +1576,7 @@ async function saveToNotion() {
                 currentNote.dueDate,
 
               transcript:
-                transcriptBox.value.trim(),
+                transcriptBox.value,
             }),
         }
       );
@@ -2076,7 +1593,7 @@ async function saveToNotion() {
       throw new Error(
         data.details ||
           data.error ||
-          "Could not save the note to Notion."
+          "Notion save failed."
       );
     }
 
@@ -2085,6 +1602,9 @@ async function saveToNotion() {
 
     successBox.hidden =
       false;
+
+    saveButton.textContent =
+      "Synced ✓";
 
     if (
       data.url
@@ -2096,286 +1616,150 @@ async function saveToNotion() {
         false;
     }
 
-    setSaveBusy(
-      false
-    );
-
-    saveButton.disabled =
-      true;
-
     setVoiceState(
       "synced"
     );
+
+    await loadUsage(
+      true
+    );
   } catch (error) {
-    notionSaved =
+    saveButton.disabled =
       false;
 
-    setSaveBusy(
-      false
-    );
-
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
-    }
-
-    console.error(
-      "NOTION SAVE ERROR:",
-      error
-    );
-
-    showError(
-      error instanceof Error
-        ? error.message
-        : "Could not save the note to Notion."
-    );
+    resetNotionState();
 
     setVoiceState(
       "ready"
     );
+
+    throw error;
   }
 }
 
 /* =========================================================
-   START RECORDING
+   RECORDING
    ========================================================= */
 
 async function startRecording() {
-  try {
-    clearError();
+  clearError();
 
-    await requireAuthSession();
+  await requireAuthSession();
 
-    resetNotionState();
-
-    resultSection.hidden =
-      true;
-
-    structuredSection.hidden =
-      true;
-
-    transcriptBox.value =
-      "";
-
-    updateTranscriptCount();
-
-    currentNote =
-      null;
-
-    categoryInput.value =
-      "";
-
-    priorityInput.value =
-      "Low";
-
-    updatePriorityAppearance();
-
-    dueDateInput.value =
-      "";
-
-    const permissionState =
-      await checkMicrophonePermission();
-
-    if (
-      permissionState ===
-        "prompt" ||
-      permissionState ===
-        "denied"
-    ) {
-      await openMicrophonePermissionPage();
-
-      showError(
-        "Allow microphone access in the new tab, then reopen the extension."
-      );
-
-      return;
-    }
-
-    const stream =
-      await navigator.mediaDevices.getUserMedia(
-        {
-          audio:
-            true,
-        }
-      );
-
-    audioChunks =
-      [];
-
-    mediaRecorder =
-      new MediaRecorder(
-        stream
-      );
-
-    mediaRecorder.addEventListener(
-      "dataavailable",
-      (
-        event
-      ) => {
-        if (
-          event.data.size >
-          0
-        ) {
-          audioChunks.push(
-            event.data
-          );
-        }
+  const stream =
+    await navigator.mediaDevices.getUserMedia(
+      {
+        audio:
+          true,
       }
     );
 
-    mediaRecorder.addEventListener(
-      "stop",
-      async () => {
-        try {
-          const mimeType =
-            mediaRecorder.mimeType ||
-            "audio/webm";
+  audioChunks =
+    [];
 
-          const audioBlob =
-            new Blob(
-              audioChunks,
-              {
-                type:
-                  mimeType,
-              }
-            );
+  mediaRecorder =
+    new MediaRecorder(
+      stream
+    );
 
-          if (
-            currentAudioUrl
-          ) {
-            URL.revokeObjectURL(
-              currentAudioUrl
-            );
-          }
-
-          currentAudioUrl =
-            URL.createObjectURL(
-              audioBlob
-            );
-
-          audioPlayer.src =
-            currentAudioUrl;
-
-          audioPlayer.hidden =
-            false;
-
-          stream
-            .getTracks()
-            .forEach(
-              (
-                track
-              ) =>
-                track.stop()
-            );
-
-          if (
-            audioBlob.size ===
-            0
-          ) {
-            showError(
-              "The recording was empty. Please try again."
-            );
-
-            setVoiceState(
-              "idle"
-            );
-
-            return;
-          }
-
-          await transcribeAudio(
-            audioBlob,
-            lastRecordingSeconds
-          );
-        } catch (error) {
-          console.error(
-            "RECORDING PROCESS ERROR:",
-            error
-          );
-
-          showError(
-            "Could not process the recording."
-          );
-
-          setVoiceState(
-            "idle"
-          );
-        }
+  mediaRecorder.addEventListener(
+    "dataavailable",
+    (event) => {
+      if (
+        event.data.size >
+        0
+      ) {
+        audioChunks.push(
+          event.data
+        );
       }
-    );
-
-    mediaRecorder.start();
-
-    recordingSeconds =
-      0;
-
-    lastRecordingSeconds =
-      0;
-
-    timer.textContent =
-      "00:00";
-
-    timerInterval =
-      setInterval(
-        () => {
-          recordingSeconds +=
-            1;
-
-          timer.textContent =
-            formatTime(
-              recordingSeconds
-            );
-        },
-        1000
-      );
-
-    setVoiceState(
-      "recording"
-    );
-  } catch (error) {
-    if (
-      handleAuthFailure(
-        error
-      )
-    ) {
-      return;
     }
+  );
 
-    console.error(
-      "MICROPHONE ERROR:",
-      error
-    );
+  mediaRecorder.addEventListener(
+    "stop",
+    async () => {
+      const blob =
+        new Blob(
+          audioChunks,
+          {
+            type:
+              mediaRecorder.mimeType ||
+              "audio/webm",
+          }
+        );
 
-    if (
-      error.name ===
-        "NotAllowedError" ||
-      error.name ===
-        "PermissionDeniedError"
-    ) {
-      await openMicrophonePermissionPage();
+      stream
+        .getTracks()
+        .forEach(
+          (track) =>
+            track.stop()
+        );
 
-      showError(
-        "Microphone permission is required. Grant permission and reopen the extension."
-      );
+      if (
+        currentAudioUrl
+      ) {
+        URL.revokeObjectURL(
+          currentAudioUrl
+        );
+      }
 
-      return;
+      currentAudioUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      audioPlayer.src =
+        currentAudioUrl;
+
+      audioPlayer.hidden =
+        false;
+
+      try {
+        await transcribeAudio(
+          blob,
+          lastRecordingSeconds
+        );
+      } catch (error) {
+        showError(
+          error instanceof Error
+            ? error.message
+            : "Processing failed."
+        );
+
+        setVoiceState(
+          "idle"
+        );
+      }
     }
+  );
 
-    showError(
-      `Could not access the microphone: ${
-        error.message ||
-        "Unknown error"
-      }`
+  mediaRecorder.start();
+
+  recordingSeconds =
+    0;
+
+  timer.textContent =
+    "00:00";
+
+  timerInterval =
+    setInterval(
+      () => {
+        recordingSeconds +=
+          1;
+
+        timer.textContent =
+          formatTime(
+            recordingSeconds
+          );
+      },
+      1000
     );
-  }
+
+  setVoiceState(
+    "recording"
+  );
 }
-
-/* =========================================================
-   STOP RECORDING
-   ========================================================= */
 
 function stopRecording() {
   if (
@@ -2394,34 +1778,12 @@ function stopRecording() {
 
   mediaRecorder.stop();
 
-  if (
+  clearInterval(
     timerInterval
-  ) {
-    clearInterval(
-      timerInterval
-    );
-
-    timerInterval =
-      null;
-  }
-
-  waveform.classList.remove(
-    "active"
   );
 
-  voiceCard.classList.remove(
-    "recording"
-  );
-
-  recordButton.classList.remove(
-    "recording"
-  );
-
-  statusText.textContent =
-    "Preparing recording";
-
-  voiceSubstatus.textContent =
-    "Getting your audio ready for AI processing.";
+  timerInterval =
+    null;
 
   setSystemState(
     "busy",
@@ -2430,33 +1792,113 @@ function stopRecording() {
 }
 
 /* =========================================================
-   AUTH EVENTS
+   EVENTS
    ========================================================= */
+
+themeToggle.addEventListener(
+  "click",
+  toggleTheme
+);
+
+refreshUsageButton.addEventListener(
+  "click",
+  () =>
+    loadUsage()
+);
+
+recordButton.addEventListener(
+  "click",
+  async () => {
+    try {
+      if (
+        mediaRecorder &&
+        mediaRecorder.state ===
+          "recording"
+      ) {
+        stopRecording();
+
+        return;
+      }
+
+      await startRecording();
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Could not record."
+      );
+    }
+  }
+);
+
+restructureButton.addEventListener(
+  "click",
+  async () => {
+    try {
+      await structureTranscript(
+        transcriptBox.value.trim()
+      );
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Could not structure note."
+      );
+    }
+  }
+);
+
+saveButton.addEventListener(
+  "click",
+  async () => {
+    try {
+      await saveToNotion();
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Could not save to Notion."
+      );
+    }
+  }
+);
+
+saveDestinationButton.addEventListener(
+  "click",
+  async () => {
+    try {
+      await saveNotionDestinationSelection();
+    } catch (error) {
+      setDestinationMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save destination.",
+        true
+      );
+    }
+  }
+);
+
+refreshDestinationButton.addEventListener(
+  "click",
+  async () => {
+    try {
+      await loadNotionDestination();
+    } catch (error) {
+      setDestinationMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not refresh destination.",
+        true
+      );
+    }
+  }
+);
 
 authForm.addEventListener(
   "submit",
-  async (
-    event
-  ) => {
+  async (event) => {
     event.preventDefault();
-
-    const email =
-      authEmail.value.trim();
-
-    const password =
-      authPassword.value;
-
-    if (
-      !email ||
-      !password
-    ) {
-      setAuthMessage(
-        "Enter your email and password.",
-        true
-      );
-
-      return;
-    }
 
     try {
       authButton.disabled =
@@ -2465,32 +1907,23 @@ authForm.addEventListener(
       authButton.textContent =
         "Entering workspace...";
 
-      setAuthMessage(
-        ""
-      );
-
       const session =
         await window.voiceToNotionAuth.signInWithPassword(
-          email,
-          password
+          authEmail.value.trim(),
+          authPassword.value
         );
-
-      authPassword.value =
-        "";
 
       setAppAuthenticated(
         true,
         session.user?.email ||
-          email
+          authEmail.value.trim()
       );
 
-      await loadNotionDestination();
+      await Promise.all([
+        loadNotionDestination(),
+        loadUsage(),
+      ]);
     } catch (error) {
-      console.error(
-        "EXTENSION LOGIN ERROR:",
-        error
-      );
-
       setAuthMessage(
         error instanceof Error
           ? error.message
@@ -2510,136 +1943,39 @@ authForm.addEventListener(
 logoutButton.addEventListener(
   "click",
   async () => {
-    try {
-      logoutButton.disabled =
-        true;
+    await window.voiceToNotionAuth.signOutExtension();
 
-      logoutButton.textContent =
-        "...";
-
-      await window.voiceToNotionAuth.signOutExtension();
-
-      setAppAuthenticated(
-        false
-      );
-
-      resetNotionDestinationUI();
-
-      resetCaptureUI();
-
-      authEmail.value =
-        "";
-
-      authPassword.value =
-        "";
-    } catch (error) {
-      console.error(
-        "EXTENSION LOGOUT ERROR:",
-        error
-      );
-
-      setAuthMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not log out.",
-        true
-      );
-    } finally {
-      logoutButton.disabled =
-        false;
-
-      logoutButton.textContent =
-        "Log out";
-    }
-  }
-);
-
-/* =========================================================
-   DESTINATION EVENTS
-   ========================================================= */
-
-notionDatabaseSelect.addEventListener(
-  "change",
-  () => {
-    setDestinationMessage(
-      ""
+    setAppAuthenticated(
+      false
     );
 
-    updateDestinationButton();
+    usageContent.hidden =
+      true;
 
-    resetNotionState();
+    usageLoading.hidden =
+      false;
   }
 );
 
-saveDestinationButton.addEventListener(
-  "click",
-  saveNotionDestinationSelection
-);
-
-refreshDestinationButton.addEventListener(
-  "click",
-  loadNotionDestination
-);
-
-/* =========================================================
-   RECORDING EVENTS
-   ========================================================= */
-
-recordButton.addEventListener(
-  "click",
-  async () => {
-    if (
-      mediaRecorder &&
-      mediaRecorder.state ===
-        "recording"
-    ) {
-      stopRecording();
-
-      return;
-    }
-
-    await startRecording();
-  }
-);
-
-/* =========================================================
-   TRANSCRIPT EVENTS
-   ========================================================= */
-
-restructureButton.addEventListener(
-  "click",
-  async () => {
-    const transcript =
-      transcriptBox.value.trim();
-
-    if (
-      !transcript
-    ) {
-      showError(
-        "Transcript is empty."
-      );
-
-      return;
-    }
-
-    await structureTranscript(
-      transcript
+[
+  titleInput,
+  summaryInput,
+  categoryInput,
+  priorityInput,
+  dueDateInput,
+].forEach(
+  (element) => {
+    element.addEventListener(
+      "input",
+      syncCurrentNoteFromInputs
     );
   }
 );
 
 transcriptBox.addEventListener(
   "input",
-  () => {
-    updateTranscriptCount();
-
-    resetNotionState();
-  }
+  updateTranscriptCount
 );
-
-/* =========================================================
-   NOTE EVENTS
-   ========================================================= */
 
 addActionButton.addEventListener(
   "click",
@@ -2657,48 +1993,7 @@ addActionButton.addEventListener(
     renderActionItems(
       currentNote.actionItems
     );
-
-    resetNotionState();
   }
-);
-
-saveButton.addEventListener(
-  "click",
-  saveToNotion
-);
-
-titleInput.addEventListener(
-  "input",
-  syncCurrentNoteFromInputs
-);
-
-summaryInput.addEventListener(
-  "input",
-  syncCurrentNoteFromInputs
-);
-
-categoryInput.addEventListener(
-  "input",
-  syncCurrentNoteFromInputs
-);
-
-priorityInput.addEventListener(
-  "change",
-  syncCurrentNoteFromInputs
-);
-
-dueDateInput.addEventListener(
-  "input",
-  syncCurrentNoteFromInputs
-);
-
-/* =========================================================
-   THEME
-   ========================================================= */
-
-themeToggle.addEventListener(
-  "click",
-  toggleTheme
 );
 
 /* =========================================================
@@ -2710,16 +2005,44 @@ async function initialize() {
 
   updateTranscriptCount();
 
-  priorityInput.value =
-    "Low";
-
-  updatePriorityAppearance();
-
   setVoiceState(
     "idle"
   );
 
-  await initializeAuth();
+  try {
+    const session =
+      await window.voiceToNotionAuth.getValidAuthSession();
+
+    if (
+      !session
+    ) {
+      setAppAuthenticated(
+        false
+      );
+
+      return;
+    }
+
+    setAppAuthenticated(
+      true,
+      session.user?.email ||
+        ""
+    );
+
+    await Promise.all([
+      loadNotionDestination(),
+      loadUsage(),
+    ]);
+  } catch (error) {
+    console.error(
+      "INITIALIZATION ERROR:",
+      error
+    );
+
+    setAppAuthenticated(
+      false
+    );
+  }
 }
 
 initialize();

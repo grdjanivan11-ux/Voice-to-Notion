@@ -2,6 +2,9 @@ import { Client } from "@notionhq/client";
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  incrementMonthlyUsage,
+} from "@/lib/usage";
 
 type Priority =
   | "Low"
@@ -18,21 +21,28 @@ type SaveNoteRequest = {
   transcript: string;
 };
 
-const NOTION_TEXT_LIMIT = 1900;
+const NOTION_TEXT_LIMIT =
+  1900;
 
 function splitText(
   text: string,
-  maxLength = NOTION_TEXT_LIMIT
+  maxLength =
+    NOTION_TEXT_LIMIT
 ) {
-  const cleaned = text.trim();
+  const cleaned =
+    text.trim();
 
-  if (!cleaned) {
+  if (
+    !cleaned
+  ) {
     return [];
   }
 
-  const chunks: string[] = [];
+  const chunks:
+    string[] = [];
 
-  let remaining = cleaned;
+  let remaining =
+    cleaned;
 
   while (
     remaining.length >
@@ -44,24 +54,37 @@ function splitText(
         maxLength
       );
 
-    if (splitIndex <= 0) {
-      splitIndex = maxLength;
+    if (
+      splitIndex <=
+      0
+    ) {
+      splitIndex =
+        maxLength;
     }
 
     chunks.push(
       remaining
-        .slice(0, splitIndex)
+        .slice(
+          0,
+          splitIndex
+        )
         .trim()
     );
 
     remaining =
       remaining
-        .slice(splitIndex)
+        .slice(
+          splitIndex
+        )
         .trim();
   }
 
-  if (remaining) {
-    chunks.push(remaining);
+  if (
+    remaining
+  ) {
+    chunks.push(
+      remaining
+    );
   }
 
   return chunks;
@@ -75,27 +98,55 @@ function getCategoryEmoji(
       .trim()
       .toLowerCase();
 
-  const emojiMap: Record<
-    string,
-    string
-  > = {
-    work: "💼",
-    personal: "✨",
-    study: "📚",
-    health: "💪",
-    finance: "💰",
-    meeting: "🤝",
-    idea: "💡",
-    task: "✅",
-    shopping: "🛒",
-    travel: "✈️",
-    research: "🔎",
-    reminder: "⏰",
-    other: "🎙️",
-  };
+  const emojiMap:
+    Record<
+      string,
+      string
+    > = {
+      work:
+        "💼",
+
+      personal:
+        "✨",
+
+      study:
+        "📚",
+
+      health:
+        "💪",
+
+      finance:
+        "💰",
+
+      meeting:
+        "🤝",
+
+      idea:
+        "💡",
+
+      task:
+        "✅",
+
+      shopping:
+        "🛒",
+
+      travel:
+        "✈️",
+
+      research:
+        "🔎",
+
+      reminder:
+        "⏰",
+
+      other:
+        "🎙️",
+    };
 
   return (
-    emojiMap[normalized] ??
+    emojiMap[
+      normalized
+    ] ??
     "🎙️"
   );
 }
@@ -104,9 +155,9 @@ export async function POST(
   request: Request
 ) {
   try {
-    /*
-      AUTH
-    */
+    /* =====================================================
+       AUTH
+       ===================================================== */
 
     const authorization =
       request.headers.get(
@@ -125,19 +176,25 @@ export async function POST(
             "Authentication required.",
         },
         {
-          status: 401,
+          status:
+            401,
         }
       );
     }
 
     const accessToken =
-      authorization.slice(
-        "Bearer ".length
-      );
+      authorization
+        .slice(
+          "Bearer ".length
+        )
+        .trim();
 
     const {
-      data: { user },
-      error: userError,
+      data: {
+        user,
+      },
+      error:
+        userError,
     } =
       await supabaseAdmin.auth.getUser(
         accessToken
@@ -153,14 +210,15 @@ export async function POST(
             "Your login session is invalid or expired.",
         },
         {
-          status: 401,
+          status:
+            401,
         }
       );
     }
 
-    /*
-      REQUEST BODY
-    */
+    /* =====================================================
+       BODY
+       ===================================================== */
 
     const body =
       (await request.json()) as SaveNoteRequest;
@@ -173,11 +231,13 @@ export async function POST(
       priority,
       dueDate,
       transcript,
-    } = body;
+    } =
+      body;
 
     if (
       !title ||
-      typeof title !== "string"
+      typeof title !==
+        "string"
     ) {
       return NextResponse.json(
         {
@@ -185,7 +245,8 @@ export async function POST(
             "Title is required.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
@@ -201,18 +262,21 @@ export async function POST(
             "Action items must be an array.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    /*
-      LOAD USER'S NOTION CONNECTION
-    */
+    /* =====================================================
+       CONNECTION
+       ===================================================== */
 
     const {
-      data: connection,
-      error: connectionError,
+      data:
+        connection,
+      error:
+        connectionError,
     } =
       await supabaseAdmin
         .from(
@@ -232,7 +296,9 @@ export async function POST(
         )
         .maybeSingle();
 
-    if (connectionError) {
+    if (
+      connectionError
+    ) {
       console.error(
         "NOTION CONNECTION LOOKUP ERROR:",
         connectionError
@@ -244,19 +310,23 @@ export async function POST(
             "Could not load your Notion connection.",
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
 
-    if (!connection) {
+    if (
+      !connection
+    ) {
       return NextResponse.json(
         {
           error:
             "No Notion connection was found for this account.",
         },
         {
-          status: 404,
+          status:
+            404,
         }
       );
     }
@@ -264,14 +334,17 @@ export async function POST(
     const dataSourceId =
       connection.selected_data_source_id;
 
-    if (!dataSourceId) {
+    if (
+      !dataSourceId
+    ) {
       return NextResponse.json(
         {
           error:
             "No Notion destination has been selected.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
@@ -282,9 +355,9 @@ export async function POST(
           connection.access_token,
       });
 
-    /*
-      CLEAN INPUT
-    */
+    /* =====================================================
+       CLEAN INPUT
+       ===================================================== */
 
     const cleanTitle =
       title.trim();
@@ -297,12 +370,16 @@ export async function POST(
       category?.trim() ||
       "Other";
 
-    const cleanPriority: Priority =
-      priority === "High" ||
-      priority === "Medium" ||
-      priority === "Low"
-        ? priority
-        : "Low";
+    const cleanPriority:
+      Priority =
+        priority ===
+          "High" ||
+        priority ===
+          "Medium" ||
+        priority ===
+          "Low"
+          ? priority
+          : "Low";
 
     const cleanTranscript =
       transcript?.trim() ||
@@ -310,12 +387,16 @@ export async function POST(
 
     const cleanActionItems =
       actionItems
-        .map((item) =>
-          typeof item === "string"
-            ? item.trim()
-            : ""
+        .map(
+          (item) =>
+            typeof item ===
+            "string"
+              ? item.trim()
+              : ""
         )
-        .filter(Boolean);
+        .filter(
+          Boolean
+        );
 
     const summaryChunks =
       splitText(
@@ -327,15 +408,17 @@ export async function POST(
         cleanTranscript
       );
 
-    /*
-      INSPECT NOTION SCHEMA
-    */
+    /* =====================================================
+       SCHEMA
+       ===================================================== */
 
     const dataSource =
-      await notion.dataSources.retrieve({
-        data_source_id:
-          dataSourceId,
-      });
+      await notion.dataSources.retrieve(
+        {
+          data_source_id:
+            dataSourceId,
+        }
+      );
 
     const schema =
       dataSource.properties;
@@ -345,46 +428,52 @@ export async function POST(
         typeof notion.pages.create
       >[0]["properties"];
 
-    const pageProperties: PageProperties =
-      {};
-
-    /*
-      TITLE
-      Locate title by TYPE,
-      not by property name.
-    */
+    const pageProperties:
+      PageProperties =
+        {};
 
     const titleProperty =
       Object.entries(
         schema
       ).find(
-        ([, property]) =>
+        (
+          [
+            ,
+            property,
+          ]
+        ) =>
           property.type ===
           "title"
       );
 
-    if (!titleProperty) {
+    if (
+      !titleProperty
+    ) {
       return NextResponse.json(
         {
           error:
             "The selected Notion database has no title property.",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
     const [
       titlePropertyName,
-    ] = titleProperty;
+    ] =
+      titleProperty;
 
     pageProperties[
       titlePropertyName
     ] = {
       title: [
         {
-          type: "text",
+          type:
+            "text",
+
           text: {
             content:
               cleanTitle,
@@ -393,60 +482,50 @@ export async function POST(
       ],
     };
 
-    /*
-      OPTIONAL CATEGORY
-    */
-
     if (
       schema.Category?.type ===
       "select"
     ) {
-      pageProperties.Category = {
-        select: {
-          name:
-            cleanCategory,
-        },
-      };
+      pageProperties.Category =
+        {
+          select: {
+            name:
+              cleanCategory,
+          },
+        };
     }
-
-    /*
-      OPTIONAL PRIORITY
-    */
 
     if (
       schema.Priority?.type ===
       "select"
     ) {
-      pageProperties.Priority = {
-        select: {
-          name:
-            cleanPriority,
-        },
-      };
+      pageProperties.Priority =
+        {
+          select: {
+            name:
+              cleanPriority,
+          },
+        };
     }
-
-    /*
-      OPTIONAL SOURCE
-    */
 
     if (
       schema.Source?.type ===
       "select"
     ) {
-      pageProperties.Source = {
-        select: {
-          name: "Voice",
-        },
-      };
+      pageProperties.Source =
+        {
+          select: {
+            name:
+              "Voice",
+          },
+        };
     }
 
-    /*
-      OPTIONAL ACTION COUNT
-    */
-
     if (
-      schema["Action Count"]
-        ?.type === "number"
+      schema[
+        "Action Count"
+      ]?.type ===
+      "number"
     ) {
       pageProperties[
         "Action Count"
@@ -456,27 +535,22 @@ export async function POST(
       };
     }
 
-    /*
-      OPTIONAL DUE DATE
-    */
-
     if (
       dueDate &&
-      schema["Due Date"]?.type ===
+      schema[
+        "Due Date"
+      ]?.type ===
         "date"
     ) {
       pageProperties[
         "Due Date"
       ] = {
         date: {
-          start: dueDate,
+          start:
+            dueDate,
         },
       };
     }
-
-    /*
-      OPTIONAL STATUS
-    */
 
     if (
       schema.Status?.type ===
@@ -488,424 +562,560 @@ export async function POST(
 
       const preferred =
         options.find(
-          (option) =>
+          (
+            option
+          ) =>
             option.name ===
             "Inbox"
         ) ??
         options.find(
-          (option) =>
+          (
+            option
+          ) =>
             option.name ===
             "Not started"
         ) ??
         options[0];
 
-      if (preferred) {
-        pageProperties.Status = {
-          status: {
-            name:
-              preferred.name,
-          },
-        };
+      if (
+        preferred
+      ) {
+        pageProperties.Status =
+          {
+            status: {
+              name:
+                preferred.name,
+            },
+          };
       }
     }
 
-    /*
-      CREATE PAGE
-    */
+    /* =====================================================
+       CREATE PREMIUM PAGE
+       ===================================================== */
 
     const page =
-      await notion.pages.create({
-        parent: {
-          type:
-            "data_source_id",
+      await notion.pages.create(
+        {
+          parent: {
+            type:
+              "data_source_id",
 
-          data_source_id:
-            dataSourceId,
-        },
-
-        icon: {
-          type: "emoji",
-
-          emoji:
-            getCategoryEmoji(
-              cleanCategory
-            ) as any,
-        },
-
-        properties:
-          pageProperties,
-
-        children: [
-          {
-            object: "block",
-            type: "callout",
-
-            callout: {
-              icon: {
-                type: "emoji",
-                emoji: "✨",
-              },
-
-              color:
-                "purple_background",
-
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "Structured automatically by Voice to Notion",
-                  },
-
-                  annotations: {
-                    bold: true,
-                  },
-                },
-              ],
-            },
+            data_source_id:
+              dataSourceId,
           },
 
-          {
-            object: "block",
-            type: "divider",
-            divider: {},
+          icon: {
+            type:
+              "emoji",
+
+            emoji:
+              getCategoryEmoji(
+                cleanCategory
+              ) as any,
           },
 
-          {
-            object: "block",
-            type: "heading_2",
+          properties:
+            pageProperties,
 
-            heading_2: {
-              rich_text: [
-                {
-                  type: "text",
-                  text: {
-                    content:
-                      "✦ Summary",
-                  },
-                },
-              ],
-
-              is_toggleable:
-                false,
-            },
-          },
-
-          ...summaryChunks.map(
-            (chunk) => ({
+          children: [
+            {
               object:
-                "block" as const,
+                "block",
 
               type:
-                "paragraph" as const,
+                "callout",
+
+              callout: {
+                icon: {
+                  type:
+                    "emoji",
+
+                  emoji:
+                    "✨",
+                },
+
+                color:
+                  "purple_background",
+
+                rich_text: [
+                  {
+                    type:
+                      "text",
+
+                    text: {
+                      content:
+                        "Structured automatically by Voice to Notion",
+                    },
+
+                    annotations: {
+                      bold:
+                        true,
+                    },
+                  },
+                ],
+              },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "divider",
+
+              divider:
+                {},
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "heading_2",
+
+              heading_2: {
+                rich_text: [
+                  {
+                    type:
+                      "text",
+
+                    text: {
+                      content:
+                        "✦ Summary",
+                    },
+                  },
+                ],
+
+                is_toggleable:
+                  false,
+              },
+            },
+
+            ...summaryChunks.map(
+              (
+                chunk
+              ) => ({
+                object:
+                  "block" as const,
+
+                type:
+                  "paragraph" as const,
+
+                paragraph: {
+                  rich_text: [
+                    {
+                      type:
+                        "text" as const,
+
+                      text: {
+                        content:
+                          chunk,
+                      },
+                    },
+                  ],
+                },
+              })
+            ),
+
+            {
+              object:
+                "block",
+
+              type:
+                "heading_2",
+
+              heading_2: {
+                rich_text: [
+                  {
+                    type:
+                      "text",
+
+                    text: {
+                      content:
+                        "◈ Capture Details",
+                    },
+                  },
+                ],
+
+                is_toggleable:
+                  false,
+              },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "bulleted_list_item",
+
+              bulleted_list_item:
+                {
+                  rich_text:
+                    [
+                      {
+                        type:
+                          "text",
+
+                        text: {
+                          content:
+                            `Category: ${cleanCategory}`,
+                        },
+                      },
+                    ],
+                },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "bulleted_list_item",
+
+              bulleted_list_item:
+                {
+                  rich_text:
+                    [
+                      {
+                        type:
+                          "text",
+
+                        text: {
+                          content:
+                            `Priority: ${cleanPriority}`,
+                        },
+                      },
+                    ],
+                },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "bulleted_list_item",
+
+              bulleted_list_item:
+                {
+                  rich_text:
+                    [
+                      {
+                        type:
+                          "text",
+
+                        text: {
+                          content:
+                            `Action items: ${cleanActionItems.length}`,
+                        },
+                      },
+                    ],
+                },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "bulleted_list_item",
+
+              bulleted_list_item:
+                {
+                  rich_text:
+                    [
+                      {
+                        type:
+                          "text",
+
+                        text: {
+                          content:
+                            dueDate
+                              ? `Due date: ${dueDate}`
+                              : "Due date: None",
+                        },
+                      },
+                    ],
+                },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "bulleted_list_item",
+
+              bulleted_list_item:
+                {
+                  rich_text:
+                    [
+                      {
+                        type:
+                          "text",
+
+                        text: {
+                          content:
+                            "Source: Voice capture",
+                        },
+                      },
+                    ],
+                },
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "divider",
+
+              divider:
+                {},
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "heading_2",
+
+              heading_2: {
+                rich_text: [
+                  {
+                    type:
+                      "text",
+
+                    text: {
+                      content:
+                        "✓ Action Items",
+                    },
+                  },
+                ],
+
+                is_toggleable:
+                  false,
+              },
+            },
+
+            ...(cleanActionItems.length
+              ? cleanActionItems.map(
+                  (
+                    item
+                  ) => ({
+                    object:
+                      "block" as const,
+
+                    type:
+                      "to_do" as const,
+
+                    to_do: {
+                      rich_text:
+                        [
+                          {
+                            type:
+                              "text" as const,
+
+                            text: {
+                              content:
+                                item,
+                            },
+                          },
+                        ],
+
+                      checked:
+                        false,
+                    },
+                  })
+                )
+              : [
+                  {
+                    object:
+                      "block" as const,
+
+                    type:
+                      "paragraph" as const,
+
+                    paragraph:
+                      {
+                        rich_text:
+                          [
+                            {
+                              type:
+                                "text" as const,
+
+                              text: {
+                                content:
+                                  "No action items were detected.",
+                              },
+
+                              annotations:
+                                {
+                                  italic:
+                                    true,
+
+                                  color:
+                                    "gray" as const,
+                                },
+                            },
+                          ],
+                      },
+                  },
+                ]),
+
+            {
+              object:
+                "block",
+
+              type:
+                "divider",
+
+              divider:
+                {},
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "heading_2",
+
+              heading_2: {
+                rich_text: [
+                  {
+                    type:
+                      "text",
+
+                    text: {
+                      content:
+                        "🎙 Original Transcript",
+                    },
+                  },
+                ],
+
+                is_toggleable:
+                  false,
+              },
+            },
+
+            ...transcriptChunks.map(
+              (
+                chunk
+              ) => ({
+                object:
+                  "block" as const,
+
+                type:
+                  "quote" as const,
+
+                quote: {
+                  rich_text: [
+                    {
+                      type:
+                        "text" as const,
+
+                      text: {
+                        content:
+                          chunk,
+                      },
+                    },
+                  ],
+                },
+              })
+            ),
+
+            {
+              object:
+                "block",
+
+              type:
+                "divider",
+
+              divider:
+                {},
+            },
+
+            {
+              object:
+                "block",
+
+              type:
+                "paragraph",
 
               paragraph: {
                 rich_text: [
                   {
                     type:
-                      "text" as const,
+                      "text",
 
                     text: {
                       content:
-                        chunk,
+                        "✦ Captured, structured and organized with Voice to Notion",
+                    },
+
+                    annotations: {
+                      italic:
+                        true,
+
+                      color:
+                        "gray",
                     },
                   },
                 ],
               },
-            })
-          ),
-
-          {
-            object: "block",
-            type: "heading_2",
-
-            heading_2: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "◈ Capture Details",
-                  },
-                },
-              ],
-
-              is_toggleable:
-                false,
             },
-          },
+          ],
+        }
+      );
 
-          {
-            object: "block",
-            type:
-              "bulleted_list_item",
+    /* =====================================================
+       USAGE
 
-            bulleted_list_item: {
-              rich_text: [
-                {
-                  type: "text",
+       Count ONLY after Notion has successfully created
+       the page.
+       ===================================================== */
 
-                  text: {
-                    content:
-                      `Category: ${cleanCategory}`,
-                  },
-                },
-              ],
-            },
-          },
+    try {
+      await incrementMonthlyUsage(
+        user.id,
+        "notion_saves",
+        1
+      );
+    } catch (
+      usageError
+    ) {
+      /*
+        Important:
+        The user's Notion page already exists at this point.
 
-          {
-            object: "block",
-            type:
-              "bulleted_list_item",
+        We do not return a failed save response and encourage
+        them to click Save again, because that could create a
+        duplicate Notion page.
 
-            bulleted_list_item: {
-              rich_text: [
-                {
-                  type: "text",
+        Log the tracking issue instead.
+      */
 
-                  text: {
-                    content:
-                      `Priority: ${cleanPriority}`,
-                  },
-                },
-              ],
-            },
-          },
+      console.error(
+        "NOTION SAVE USAGE TRACKING ERROR:",
+        usageError
+      );
+    }
 
-          {
-            object: "block",
-            type:
-              "bulleted_list_item",
-
-            bulleted_list_item: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      `Action items: ${cleanActionItems.length}`,
-                  },
-                },
-              ],
-            },
-          },
-
-          {
-            object: "block",
-            type:
-              "bulleted_list_item",
-
-            bulleted_list_item: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      dueDate
-                        ? `Due date: ${dueDate}`
-                        : "Due date: None",
-                  },
-                },
-              ],
-            },
-          },
-
-          {
-            object: "block",
-            type:
-              "bulleted_list_item",
-
-            bulleted_list_item: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "Source: Voice capture",
-                  },
-                },
-              ],
-            },
-          },
-
-          {
-            object: "block",
-            type: "divider",
-            divider: {},
-          },
-
-          {
-            object: "block",
-            type: "heading_2",
-
-            heading_2: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "✓ Action Items",
-                  },
-                },
-              ],
-
-              is_toggleable:
-                false,
-            },
-          },
-
-          ...(cleanActionItems.length
-            ? cleanActionItems.map(
-                (item) => ({
-                  object:
-                    "block" as const,
-
-                  type:
-                    "to_do" as const,
-
-                  to_do: {
-                    rich_text: [
-                      {
-                        type:
-                          "text" as const,
-
-                        text: {
-                          content:
-                            item,
-                        },
-                      },
-                    ],
-
-                    checked:
-                      false,
-                  },
-                })
-              )
-            : [
-                {
-                  object:
-                    "block" as const,
-
-                  type:
-                    "paragraph" as const,
-
-                  paragraph: {
-                    rich_text: [
-                      {
-                        type:
-                          "text" as const,
-
-                        text: {
-                          content:
-                            "No action items were detected.",
-                        },
-
-                        annotations: {
-                          italic:
-                            true,
-
-                          color:
-                            "gray" as const,
-                        },
-                      },
-                    ],
-                  },
-                },
-              ]),
-
-          {
-            object: "block",
-            type: "divider",
-            divider: {},
-          },
-
-          {
-            object: "block",
-            type: "heading_2",
-
-            heading_2: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "🎙 Original Transcript",
-                  },
-                },
-              ],
-
-              is_toggleable:
-                false,
-            },
-          },
-
-          ...transcriptChunks.map(
-            (chunk) => ({
-              object:
-                "block" as const,
-
-              type:
-                "quote" as const,
-
-              quote: {
-                rich_text: [
-                  {
-                    type:
-                      "text" as const,
-
-                    text: {
-                      content:
-                        chunk,
-                    },
-                  },
-                ],
-              },
-            })
-          ),
-
-          {
-            object: "block",
-            type: "divider",
-            divider: {},
-          },
-
-          {
-            object: "block",
-            type: "paragraph",
-
-            paragraph: {
-              rich_text: [
-                {
-                  type: "text",
-
-                  text: {
-                    content:
-                      "✦ Captured, structured and organized with Voice to Notion",
-                  },
-
-                  annotations: {
-                    italic: true,
-                    color: "gray",
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      });
+    /* =====================================================
+       SUCCESS
+       ===================================================== */
 
     return NextResponse.json({
-      success: true,
+      success:
+        true,
 
-      pageId: page.id,
+      pageId:
+        page.id,
 
       url:
         "url" in page
@@ -933,14 +1143,17 @@ export async function POST(
 
       dataSourceId,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "NOTION SAVE ERROR:",
       error
     );
 
     const message =
-      error instanceof Error
+      error instanceof
+      Error
         ? error.message
         : "Unknown Notion error";
 
@@ -953,7 +1166,8 @@ export async function POST(
           message,
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }

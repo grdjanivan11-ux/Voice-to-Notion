@@ -212,13 +212,172 @@
     </section>
 
     <!-- ==================================================
-         APP
+         APP CONTENT
     =================================================== -->
 
     <div
       id="appContent"
       hidden
     >
+
+      <!-- ================================================
+           USAGE
+      ================================================= -->
+
+      <section
+        id="usageCard"
+        class="panel usage-panel"
+      >
+
+        <div class="usage-header">
+
+          <div>
+
+            <span class="panel-kicker">
+              Monthly Usage
+            </span>
+
+            <div class="usage-title-row">
+
+              <h2>
+                AI Captures
+              </h2>
+
+              <span
+                id="usagePlan"
+                class="plan-pill"
+              >
+                FREE
+              </span>
+
+            </div>
+
+          </div>
+
+          <button
+            id="refreshUsageButton"
+            class="usage-refresh"
+            type="button"
+            aria-label="Refresh usage"
+            title="Refresh usage"
+          >
+            ↻
+          </button>
+
+        </div>
+
+        <div
+          id="usageLoading"
+          class="usage-loading"
+        >
+          Loading usage...
+        </div>
+
+        <div
+          id="usageContent"
+          hidden
+        >
+
+          <div class="usage-main-row">
+
+            <div>
+
+              <div class="usage-count">
+
+                <strong id="usageCurrent">
+                  0
+                </strong>
+
+                <span>
+                  /
+                  <span id="usageLimit">
+                    30
+                  </span>
+                </span>
+
+              </div>
+
+              <p
+                id="usageRemaining"
+                class="usage-remaining"
+              >
+                30 captures remaining
+              </p>
+
+            </div>
+
+            <div class="usage-reset">
+
+              <strong id="usagePercentage">
+                0%
+              </strong>
+
+              <span id="usageReset">
+                Resets next month
+              </span>
+
+            </div>
+
+          </div>
+
+          <div class="usage-progress">
+
+            <div
+              id="usageProgressBar"
+              class="usage-progress-bar"
+            ></div>
+
+          </div>
+
+          <div class="usage-stats">
+
+            <div class="usage-stat">
+
+              <span>
+                Transcriptions
+              </span>
+
+              <strong id="usageTranscriptions">
+                0
+              </strong>
+
+            </div>
+
+            <div class="usage-stat">
+
+              <span>
+                Voice Time
+              </span>
+
+              <strong id="usageVoiceTime">
+                0s
+              </strong>
+
+            </div>
+
+            <div class="usage-stat">
+
+              <span>
+                Notion Saves
+              </span>
+
+              <strong id="usageNotionSaves">
+                0
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div
+          id="usageMessage"
+          class="message usage-message"
+          hidden
+        ></div>
+
+      </section>
 
       <!-- ================================================
            VOICE CORE
@@ -626,8 +785,6 @@
 
         </div>
 
-        <!-- SMART METADATA -->
-
         <div class="metadata-grid metadata-grid-three">
 
           <div class="field">
@@ -682,8 +839,6 @@
 
         </div>
 
-        <!-- ACTION ITEMS -->
-
         <div class="task-module">
 
           <div class="action-header">
@@ -716,8 +871,6 @@
           ></div>
 
         </div>
-
-        <!-- NOTION SAVE -->
 
         <div class="save-section">
 
@@ -776,19 +929,11 @@
 
       </section>
 
-      <!-- ================================================
-           ERROR
-      ================================================= -->
-
       <div
         id="errorBox"
         class="error-box"
         hidden
       ></div>
-
-      <!-- ================================================
-           FOOTER
-      ================================================= -->
 
       <footer class="footer">
 
