@@ -11,10 +11,27 @@ import AuthGate from "@/components/AuthGate";
 import ThemeToggle from "@/components/ThemeToggle";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
+/* =========================================================
+   TYPES
+   ========================================================= */
+
 type Priority =
   | "Low"
   | "Medium"
   | "High";
+
+type PlanName =
+  | "free"
+  | "pro";
+
+type CaptureMode =
+  | "general"
+  | "task"
+  | "meeting"
+  | "idea"
+  | "study"
+  | "research"
+  | "journal";
 
 type StructuredNote = {
   title: string;
@@ -84,6 +101,38 @@ type NotionDatabaseSelectionResponse = {
   error?: string;
 };
 
+type PlanEntitlements = {
+  plan: PlanName;
+
+  displayName: string;
+
+  description: string;
+
+  badgeLabel: string;
+
+  monthlyAiCaptures: number;
+
+  maxRecordingSeconds: number;
+
+  maxNotionDestinations: number;
+
+  localHistoryLimit: number;
+
+  cloudHistory: boolean;
+
+  customCaptureModes: boolean;
+
+  smartRouting: boolean;
+
+  autoSync: boolean;
+
+  customInstructions: boolean;
+
+  advancedAi: boolean;
+
+  captureModes: CaptureMode[];
+};
+
 type UsageSummary = {
   periodStart: string;
   periodEnd: string;
@@ -97,34 +146,68 @@ type UsageSummary = {
   aiCapturesRemaining: number;
 
   percentageUsed: number;
+
+  limitReached: boolean;
 };
 
 type UsageResponse = {
   success: boolean;
-  plan?: string;
+
+  plan?: PlanName;
+
+  planStatus?: string;
+
+  planDetails?: {
+    name: PlanName;
+    displayName: string;
+    status: string;
+    currentPeriodEnd:
+      | string
+      | null;
+  };
+
+  entitlements?: PlanEntitlements;
+
   usage?: UsageSummary;
+
   error?: string;
 };
+
+/* =========================================================
+   CONSTANTS
+   ========================================================= */
 
 const HISTORY_STORAGE_KEY =
   "voice-to-notion-history";
 
-const MAX_HISTORY_ITEMS =
+const DEFAULT_HISTORY_LIMIT =
   10;
 
+const DEFAULT_FREE_RECORDING_LIMIT =
+  120;
+
+/* =========================================================
+   PAGE
+   ========================================================= */
+
 export default function Home() {
+  /* =======================================================
+     CAPTURE STATE
+     ======================================================= */
+
   const [
     transcript,
     setTranscript,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     note,
     setNote,
   ] =
-    useState<StructuredNote | null>(
-      null
-    );
+    useState<
+      StructuredNote | null
+    >(null);
 
   const [
     processingStep,
@@ -145,7 +228,8 @@ export default function Home() {
   const [
     error,
     setError,
-  ] = useState("");
+  ] =
+    useState("");
 
   const [
     isRecording,
@@ -175,6 +259,10 @@ export default function Home() {
   ] =
     useState(0);
 
+  /* =======================================================
+     NOTION SAVE
+     ======================================================= */
+
   const [
     notionSaved,
     setNotionSaved,
@@ -188,6 +276,10 @@ export default function Home() {
     useState<string | null>(
       null
     );
+
+  /* =======================================================
+     HISTORY
+     ======================================================= */
 
   const [
     history,
@@ -203,6 +295,10 @@ export default function Home() {
   ] =
     useState(false);
 
+  /* =======================================================
+     ACCOUNT
+     ======================================================= */
+
   const [
     accountEmail,
     setAccountEmail,
@@ -215,13 +311,17 @@ export default function Home() {
   ] =
     useState(false);
 
+  /* =======================================================
+     NOTION DESTINATION
+     ======================================================= */
+
   const [
     notionWorkspaceName,
     setNotionWorkspaceName,
   ] =
-    useState<string | null>(
-      null
-    );
+    useState<
+      string | null
+    >(null);
 
   const [
     notionDataSources,
@@ -267,19 +367,33 @@ export default function Home() {
   ] =
     useState("");
 
+  /* =======================================================
+     PLAN + USAGE
+     ======================================================= */
+
   const [
     usage,
     setUsage,
   ] =
-    useState<UsageSummary | null>(
-      null
-    );
+    useState<
+      UsageSummary | null
+    >(null);
 
   const [
     usagePlan,
     setUsagePlan,
   ] =
-    useState("free");
+    useState<PlanName>(
+      "free"
+    );
+
+  const [
+    entitlements,
+    setEntitlements,
+  ] =
+    useState<
+      PlanEntitlements | null
+    >(null);
 
   const [
     usageLoading,
@@ -293,13 +407,31 @@ export default function Home() {
   ] =
     useState("");
 
+  const [
+    showPlanCenter,
+    setShowPlanCenter,
+  ] =
+    useState(false);
+
+  const [
+    upgradeMessage,
+    setUpgradeMessage,
+  ] =
+    useState("");
+
+  /* =======================================================
+     REFS
+     ======================================================= */
+
   const mediaRecorderRef =
-    useRef<MediaRecorder | null>(
-      null
-    );
+    useRef<
+      MediaRecorder | null
+    >(null);
 
   const audioChunksRef =
-    useRef<Blob[]>([]);
+    useRef<
+      Blob[]
+    >([]);
 
   const recordingTimerRef =
     useRef<
@@ -308,10 +440,17 @@ export default function Home() {
       > | null
     >(null);
 
+  const recordingSecondsRef =
+    useRef(0);
+
   const currentHistoryIdRef =
-    useRef<string | null>(
-      null
-    );
+    useRef<
+      string | null
+    >(null);
+
+  /* =======================================================
+     DERIVED STATE
+     ======================================================= */
 
   const isBusy =
     processingStep ===
@@ -324,6 +463,33 @@ export default function Home() {
   const destinationChanged =
     selectedDataSourceId !==
     savedDataSourceId;
+
+  const isPro =
+    usagePlan ===
+    "pro";
+
+  const limitReached =
+    usage?.limitReached ??
+    false;
+
+  const recordingLimitSeconds =
+    entitlements
+      ?.maxRecordingSeconds ??
+    DEFAULT_FREE_RECORDING_LIMIT;
+
+  const historyLimit =
+    entitlements
+      ?.localHistoryLimit ??
+    DEFAULT_HISTORY_LIMIT;
+
+  const recordingLimitMinutes =
+    Math.max(
+      1,
+      Math.round(
+        recordingLimitSeconds /
+          60
+      )
+    );
 
   /* =========================================================
      INITIAL ACCOUNT
@@ -409,7 +575,10 @@ export default function Home() {
       localStorage.setItem(
         HISTORY_STORAGE_KEY,
         JSON.stringify(
-          history
+          history.slice(
+            0,
+            historyLimit
+          )
         )
       );
     } catch (err) {
@@ -421,6 +590,7 @@ export default function Home() {
   }, [
     history,
     historyLoaded,
+    historyLimit,
   ]);
 
   /* =========================================================
@@ -457,7 +627,7 @@ export default function Home() {
   }, [audioUrl]);
 
   /* =========================================================
-     AUTH HELPERS
+     AUTH
      ========================================================= */
 
   async function getAccessToken() {
@@ -520,7 +690,8 @@ export default function Home() {
      ========================================================= */
 
   async function loadUsage(
-    silent = false
+    silent =
+      false
   ) {
     if (
       !silent
@@ -581,8 +752,15 @@ export default function Home() {
       );
 
       setUsagePlan(
-        data.plan ||
-          "free"
+        data.plan ===
+          "pro"
+          ? "pro"
+          : "free"
+      );
+
+      setEntitlements(
+        data.entitlements ??
+          null
       );
     } catch (err) {
       console.error(
@@ -883,16 +1061,20 @@ export default function Home() {
      ========================================================= */
 
   function createHistoryItem(
-    structuredNote: StructuredNote,
-    sourceTranscript: string
+    structuredNote:
+      StructuredNote,
+
+    sourceTranscript:
+      string
   ) {
-    const item: CaptureHistoryItem =
-      {
+    const item:
+      CaptureHistoryItem = {
         id:
           crypto.randomUUID(),
 
         createdAt:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
 
         transcript:
           sourceTranscript,
@@ -914,7 +1096,7 @@ export default function Home() {
           ...current,
         ].slice(
           0,
-          MAX_HISTORY_ITEMS
+          historyLimit
         )
     );
 
@@ -922,14 +1104,18 @@ export default function Home() {
   }
 
   function updateHistoryItem(
-    id: string,
-    changes: Partial<CaptureHistoryItem>
+    id:
+      string,
+
+    changes:
+      Partial<CaptureHistoryItem>
   ) {
     setHistory(
       (current) =>
         current.map(
           (item) =>
-            item.id === id
+            item.id ===
+            id
               ? {
                   ...item,
                   ...changes,
@@ -944,6 +1130,22 @@ export default function Home() {
      ========================================================= */
 
   async function startRecording() {
+    if (
+      limitReached
+    ) {
+      setError(
+        isPro
+          ? "You have reached your monthly Pro capture allowance."
+          : "You've used all 30 Free captures this month. Upgrade to Pro for 500 monthly captures."
+      );
+
+      setShowPlanCenter(
+        true
+      );
+
+      return;
+    }
+
     try {
       setError(
         ""
@@ -988,6 +1190,9 @@ export default function Home() {
         0
       );
 
+      recordingSecondsRef.current =
+        0;
+
       const stream =
         await navigator.mediaDevices.getUserMedia(
           {
@@ -1022,6 +1227,12 @@ export default function Home() {
       recorder.onstop =
         async () => {
           try {
+            const finalDuration =
+              Math.max(
+                1,
+                recordingSecondsRef.current
+              );
+
             const blob =
               new Blob(
                 audioChunksRef.current,
@@ -1054,7 +1265,7 @@ export default function Home() {
 
             await processRecording(
               blob,
-              recordingSeconds
+              finalDuration
             );
           } catch (err) {
             setProcessingStep(
@@ -1082,11 +1293,26 @@ export default function Home() {
       recordingTimerRef.current =
         setInterval(
           () => {
+            recordingSecondsRef.current +=
+              1;
+
+            const nextSeconds =
+              recordingSecondsRef.current;
+
             setRecordingSeconds(
-              (previous) =>
-                previous +
-                1
+              nextSeconds
             );
+
+            if (
+              nextSeconds >=
+              recordingLimitSeconds
+            ) {
+              stopRecording();
+
+              setError(
+                `Recording stopped automatically at the ${recordingLimitMinutes}-minute ${isPro ? "Pro" : "Free"} plan limit.`
+              );
+            }
           },
           1000
         );
@@ -1149,8 +1375,11 @@ export default function Home() {
      ========================================================= */
 
   async function transcribeBlob(
-    blob: Blob,
-    durationSeconds: number
+    blob:
+      Blob,
+
+    durationSeconds:
+      number
   ) {
     setProcessingStep(
       "transcribing"
@@ -1224,6 +1453,19 @@ export default function Home() {
     }
 
     if (
+      data.code ===
+      "PLAN_LIMIT_REACHED"
+    ) {
+      await loadUsage(
+        true
+      );
+
+      setShowPlanCenter(
+        true
+      );
+    }
+
+    if (
       !response.ok
     ) {
       throw new Error(
@@ -1236,11 +1478,12 @@ export default function Home() {
   }
 
   /* =========================================================
-     STRUCTURE NOTE
+     STRUCTURE
      ========================================================= */
 
   async function structureText(
-    text: string
+    text:
+      string
   ): Promise<StructuredNote> {
     setProcessingStep(
       "structuring"
@@ -1288,6 +1531,19 @@ export default function Home() {
     }
 
     if (
+      data.code ===
+      "PLAN_LIMIT_REACHED"
+    ) {
+      await loadUsage(
+        true
+      );
+
+      setShowPlanCenter(
+        true
+      );
+    }
+
+    if (
       !response.ok
     ) {
       throw new Error(
@@ -1296,8 +1552,8 @@ export default function Home() {
       );
     }
 
-    const structuredNote: StructuredNote =
-      {
+    const structuredNote:
+      StructuredNote = {
         ...data,
 
         priority:
@@ -1313,9 +1569,11 @@ export default function Home() {
   }
 
   async function processRecording(
-    blob: Blob,
-    durationSeconds =
-      recordingSeconds
+    blob:
+      Blob,
+
+    durationSeconds:
+      number
   ) {
     try {
       const newTranscript =
@@ -1364,13 +1622,28 @@ export default function Home() {
   }
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
+    event:
+      FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
     if (
       !transcript.trim()
     ) {
+      return;
+    }
+
+    if (
+      limitReached
+    ) {
+      setShowPlanCenter(
+        true
+      );
+
+      setError(
+        "Your monthly AI capture allowance has been used."
+      );
+
       return;
     }
 
@@ -1421,9 +1694,22 @@ export default function Home() {
       return;
     }
 
+    if (
+      limitReached
+    ) {
+      setShowPlanCenter(
+        true
+      );
+
+      return;
+    }
+
     await processRecording(
       audioBlob,
-      recordingSeconds
+      Math.max(
+        1,
+        recordingSecondsRef.current
+      )
     );
   }
 
@@ -1543,6 +1829,10 @@ export default function Home() {
         );
       }
 
+      await loadUsage(
+        true
+      );
+
       setProcessingStep(
         "ready"
       );
@@ -1564,7 +1854,8 @@ export default function Home() {
      ========================================================= */
 
   function updateNote(
-    changes: Partial<StructuredNote>
+    changes:
+      Partial<StructuredNote>
   ) {
     setNote(
       (current) => {
@@ -1599,8 +1890,11 @@ export default function Home() {
   }
 
   function updateActionItem(
-    index: number,
-    value: string
+    index:
+      number,
+
+    value:
+      string
   ) {
     if (
       !note
@@ -1637,7 +1931,8 @@ export default function Home() {
   }
 
   function removeActionItem(
-    index: number
+    index:
+      number
   ) {
     if (
       !note
@@ -1695,6 +1990,9 @@ export default function Home() {
       0
     );
 
+    recordingSecondsRef.current =
+      0;
+
     setProcessingStep(
       "idle"
     );
@@ -1710,7 +2008,8 @@ export default function Home() {
   }
 
   function loadHistoryItem(
-    item: CaptureHistoryItem
+    item:
+      CaptureHistoryItem
   ) {
     setTranscript(
       item.transcript
@@ -1753,11 +2052,26 @@ export default function Home() {
   }
 
   /* =========================================================
+     PLAN CENTER
+     ========================================================= */
+
+  function handleUpgradeClick() {
+    setUpgradeMessage(
+      "Pro checkout is the next phase. Your account and entitlement system are already ready for Stripe."
+    );
+
+    setShowPlanCenter(
+      true
+    );
+  }
+
+  /* =========================================================
      HELPERS
      ========================================================= */
 
   function formatRecordingTime(
-    seconds: number
+    seconds:
+      number
   ) {
     const minutes =
       Math.floor(
@@ -1783,7 +2097,8 @@ export default function Home() {
   }
 
   function formatUsageResetDate(
-    periodEnd: string
+    periodEnd:
+      string
   ) {
     const date =
       new Date(
@@ -1805,6 +2120,32 @@ export default function Home() {
     ).format(
       date
     );
+  }
+
+  function formatVoiceTime(
+    seconds:
+      number
+  ) {
+    if (
+      seconds <
+      60
+    ) {
+      return `${seconds}s`;
+    }
+
+    const minutes =
+      Math.floor(
+        seconds /
+          60
+      );
+
+    const remaining =
+      seconds %
+      60;
+
+    return remaining
+      ? `${minutes}m ${remaining}s`
+      : `${minutes}m`;
   }
 
   function systemLabel() {
@@ -1844,7 +2185,9 @@ export default function Home() {
         : "Note Ready";
     }
 
-    return "System Ready";
+    return isPro
+      ? "Pro Intelligence Active"
+      : "System Ready";
   }
 
   /* =========================================================
@@ -1853,6 +2196,7 @@ export default function Home() {
 
   return (
     <AuthGate>
+
       <main className="vtn-shell vtn-mobile-shell">
 
         <div className="vtn-orb vtn-orb-purple" />
@@ -1866,7 +2210,13 @@ export default function Home() {
 
           <header className="vtn-mobile-hud sticky top-3 z-50 mb-6">
 
-            <div className="vtn-glass flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 sm:px-5">
+            <div
+              className={`vtn-glass flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 sm:px-5 ${
+                isPro
+                  ? "border-violet-500/25 shadow-[0_0_45px_rgba(139,92,246,0.08)]"
+                  : ""
+              }`}
+            >
 
               <div className="flex min-w-0 items-center gap-3">
 
@@ -1876,9 +2226,19 @@ export default function Home() {
 
                 <div className="min-w-0">
 
-                  <p className="truncate text-sm font-bold">
-                    Voice to Notion
-                  </p>
+                  <div className="flex items-center gap-2">
+
+                    <p className="truncate text-sm font-bold">
+                      Voice to Notion
+                    </p>
+
+                    {isPro && (
+                      <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[8px] font-black tracking-[0.12em] text-violet-300">
+                        ✦ PRO
+                      </span>
+                    )}
+
+                  </div>
 
                   <div className="mt-1 flex items-center gap-2">
 
@@ -1921,7 +2281,7 @@ export default function Home() {
           </header>
 
           {/* =================================================
-              MOBILE HERO
+              HERO
           ================================================== */}
 
           <section className="vtn-mobile-hero mb-5 text-center md:hidden">
@@ -1930,7 +2290,9 @@ export default function Home() {
 
               <span className="vtn-eyebrow-dot" />
 
-              Voice → AI → Notion
+              {isPro
+                ? "Pro Intelligence Active"
+                : "Voice → AI → Notion"}
 
             </div>
 
@@ -1941,14 +2303,12 @@ export default function Home() {
             </h1>
 
             <p className="mx-auto mt-3 max-w-[310px] text-xs leading-5 text-[var(--muted)]">
-              Speak naturally. AI structures your thought and sends it directly to Notion.
+              {isPro
+                ? "Your Pro workspace is ready for deeper, longer and smarter captures."
+                : "Speak naturally. AI structures your thought and sends it directly to Notion."}
             </p>
 
           </section>
-
-          {/* =================================================
-              DESKTOP HERO
-          ================================================== */}
 
           <section className="mb-8 hidden md:block">
 
@@ -1956,7 +2316,9 @@ export default function Home() {
 
               <span className="vtn-eyebrow-dot" />
 
-              Voice → AI → Notion
+              {isPro
+                ? "✦ Voice to Notion Pro"
+                : "Voice → AI → Notion"}
 
             </div>
 
@@ -1973,10 +2335,20 @@ export default function Home() {
           </section>
 
           {/* =================================================
-              LIVE USAGE
+              PLAN + USAGE
           ================================================== */}
 
-          <section className="vtn-card mb-5 p-4 sm:p-5">
+          <section
+            className={`vtn-card mb-5 overflow-hidden p-4 sm:p-5 ${
+              isPro
+                ? "border-violet-500/30"
+                : ""
+            }`}
+          >
+
+            {isPro && (
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-violet-400 to-cyan-400" />
+            )}
 
             <div className="relative z-10">
 
@@ -1985,39 +2357,64 @@ export default function Home() {
                 <div>
 
                   <span className="text-[9px] font-semibold uppercase tracking-[0.17em] text-[var(--muted)]">
-                    Monthly Usage
+                    {isPro
+                      ? "Pro Command Center"
+                      : "Monthly Usage"}
                   </span>
 
-                  <div className="mt-1 flex items-center gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
 
                     <h2 className="text-base font-semibold">
                       AI Captures
                     </h2>
 
-                    <span className="vtn-badge px-2 py-1 text-[8px] uppercase">
-                      {usagePlan}
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[8px] font-black uppercase tracking-[0.1em] ${
+                        isPro
+                          ? "border border-violet-400/30 bg-violet-500/10 text-violet-300"
+                          : "vtn-badge"
+                      }`}
+                    >
+                      {isPro
+                        ? "✦ PRO"
+                        : "FREE"}
                     </span>
 
                   </div>
 
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    loadUsage()
-                  }
-                  disabled={
-                    usageLoading
-                  }
-                  className="vtn-secondary flex min-h-9 min-w-9 items-center justify-center px-2 text-xs"
-                  aria-label="Refresh usage"
-                  title="Refresh usage"
-                >
-                  {usageLoading
-                    ? "..."
-                    : "↻"}
-                </button>
+                <div className="flex gap-2">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPlanCenter(
+                        !showPlanCenter
+                      )
+                    }
+                    className="vtn-secondary min-h-9 px-3 text-[9px] font-semibold"
+                  >
+                    Plan
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      loadUsage()
+                    }
+                    disabled={
+                      usageLoading
+                    }
+                    className="vtn-secondary flex min-h-9 min-w-9 items-center justify-center px-2 text-xs"
+                    aria-label="Refresh usage"
+                  >
+                    {usageLoading
+                      ? "..."
+                      : "↻"}
+                  </button>
+
+                </div>
 
               </div>
 
@@ -2061,7 +2458,8 @@ export default function Home() {
                       </p>
 
                       <p className="mt-1 text-[9px] text-[var(--muted)]">
-                        Resets {formatUsageResetDate(
+                        Resets{" "}
+                        {formatUsageResetDate(
                           usage.periodEnd
                         )}
                       </p>
@@ -2073,7 +2471,13 @@ export default function Home() {
                   <div className="mt-3 h-2.5 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface-soft)]">
 
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-400 transition-[width] duration-500"
+                      className={`h-full rounded-full transition-[width] duration-500 ${
+                        limitReached
+                          ? "bg-gradient-to-r from-rose-500 to-orange-400"
+                          : isPro
+                            ? "bg-gradient-to-r from-violet-400 via-fuchsia-500 to-cyan-400"
+                            : "bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-400"
+                      }`}
                       style={{
                         width:
                           `${usage.percentageUsed}%`,
@@ -2103,7 +2507,9 @@ export default function Home() {
                       </span>
 
                       <p className="mt-1 text-sm font-bold">
-                        {usage.transcriptionSeconds}s
+                        {formatVoiceTime(
+                          usage.transcriptionSeconds
+                        )}
                       </p>
 
                     </div>
@@ -2122,8 +2528,204 @@ export default function Home() {
 
                   </div>
 
+                  {limitReached && (
+                    <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-500/[0.07] p-4">
+
+                      <div className="flex items-start gap-3">
+
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-300">
+                          !
+                        </div>
+
+                        <div className="min-w-0">
+
+                          <p className="text-xs font-bold">
+                            Monthly capture limit reached
+                          </p>
+
+                          <p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">
+                            {isPro
+                              ? "Your Pro allowance will reset next month."
+                              : "Your Free allowance is finished for this month. Pro includes 500 AI captures."}
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                      {!isPro && (
+                        <button
+                          type="button"
+                          onClick={
+                            handleUpgradeClick
+                          }
+                          className="vtn-primary mt-3 w-full min-h-11 px-4 text-xs"
+                        >
+                          Unlock Voice to Notion Pro ✦
+                        </button>
+                      )}
+
+                    </div>
+                  )}
+
                 </>
               ) : null}
+
+              {/* =============================================
+                  PLAN CENTER
+              ============================================== */}
+
+              {showPlanCenter && (
+                <div className="mt-5 overflow-hidden rounded-[22px] border border-violet-500/20 bg-[var(--surface-soft)]">
+
+                  <div className="border-b border-[var(--border)] p-4">
+
+                    <div className="flex items-center justify-between gap-3">
+
+                      <div>
+
+                        <span className="text-[8px] font-black uppercase tracking-[0.18em] text-violet-400">
+                          Plan Center
+                        </span>
+
+                        <h3 className="mt-1 text-base font-bold">
+                          {isPro
+                            ? "Voice to Notion Pro"
+                            : "Unlock your full capture system"}
+                        </h3>
+
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowPlanCenter(
+                            false
+                          )
+                        }
+                        className="vtn-secondary flex h-9 w-9 items-center justify-center"
+                      >
+                        ×
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                  <div className="grid gap-3 p-4 md:grid-cols-2">
+
+                    <div className={`rounded-2xl border p-4 ${
+                      !isPro
+                        ? "border-[var(--border-strong)] bg-[var(--surface-strong)]"
+                        : "border-[var(--border)]"
+                    }`}>
+
+                      <div className="flex items-center justify-between">
+
+                        <p className="text-sm font-bold">
+                          Free
+                        </p>
+
+                        {!isPro && (
+                          <span className="vtn-badge text-[8px]">
+                            CURRENT
+                          </span>
+                        )}
+
+                      </div>
+
+                      <p className="mt-3 text-2xl font-black">
+                        30
+                        <span className="ml-1 text-xs font-medium text-[var(--muted)]">
+                          captures / month
+                        </span>
+                      </p>
+
+                      <div className="mt-4 space-y-2 text-[10px] text-[var(--muted-strong)]">
+
+                        <p>✓ 2-minute recordings</p>
+                        <p>✓ 1 Notion destination</p>
+                        <p>✓ Standard AI structuring</p>
+                        <p>✓ Last 10 local captures</p>
+
+                      </div>
+
+                    </div>
+
+                    <div className={`relative overflow-hidden rounded-2xl border p-4 ${
+                      isPro
+                        ? "border-violet-400/40 bg-violet-500/[0.07]"
+                        : "border-violet-500/25 bg-violet-500/[0.04]"
+                    }`}>
+
+                      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-violet-500/20 blur-3xl" />
+
+                      <div className="relative">
+
+                        <div className="flex items-center justify-between">
+
+                          <p className="text-sm font-black">
+                            ✦ Pro
+                          </p>
+
+                          {isPro ? (
+                            <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-1 text-[8px] font-black text-violet-300">
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[8px] font-black text-cyan-300">
+                              PREMIUM
+                            </span>
+                          )}
+
+                        </div>
+
+                        <p className="mt-3 text-2xl font-black">
+                          500
+                          <span className="ml-1 text-xs font-medium text-[var(--muted)]">
+                            captures / month
+                          </span>
+                        </p>
+
+                        <div className="mt-4 grid gap-2 text-[10px] text-[var(--muted-strong)]">
+
+                          <p>✦ 15-minute recordings</p>
+                          <p>✦ Up to 5 Notion destinations</p>
+                          <p>✦ Advanced AI intelligence</p>
+                          <p>✦ Cloud capture history</p>
+                          <p>✦ Custom capture modes</p>
+                          <p>✦ Smart destination routing</p>
+                          <p>✦ Auto-sync to Notion</p>
+                          <p>✦ Custom AI instructions</p>
+
+                        </div>
+
+                        {!isPro && (
+                          <button
+                            type="button"
+                            onClick={
+                              handleUpgradeClick
+                            }
+                            className="vtn-primary mt-4 w-full min-h-11 px-4 text-xs"
+                          >
+                            Upgrade to Pro ✦
+                          </button>
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {upgradeMessage && (
+                    <div className="mx-4 mb-4 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-3 text-[10px] leading-5 text-violet-300">
+                      {upgradeMessage}
+                    </div>
+                  )}
+
+                </div>
+              )}
 
             </div>
 
@@ -2138,13 +2740,17 @@ export default function Home() {
             <aside className="space-y-5">
 
               {/* =============================================
-                  VOICE
+                  VOICE CORE
               ============================================== */}
 
               <section
                 className={`vtn-card vtn-mobile-voice-card p-5 sm:p-6 ${
                   isRecording
                     ? "vtn-recording"
+                    : ""
+                } ${
+                  isPro
+                    ? "border-violet-500/20"
                     : ""
                 }`}
               >
@@ -2156,7 +2762,9 @@ export default function Home() {
                     <div>
 
                       <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                        Voice Core
+                        {isPro
+                          ? "Pro Voice Core"
+                          : "Voice Core"}
                       </span>
 
                       <h2 className="mt-1 text-lg font-semibold md:text-xl">
@@ -2165,10 +2773,18 @@ export default function Home() {
 
                     </div>
 
-                    <div className="vtn-badge font-mono">
-                      {formatRecordingTime(
-                        recordingSeconds
-                      )}
+                    <div className="text-right">
+
+                      <div className="vtn-badge font-mono">
+                        {formatRecordingTime(
+                          recordingSeconds
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-[8px] text-[var(--muted)]">
+                        max {recordingLimitMinutes}m
+                      </p>
+
                     </div>
 
                   </div>
@@ -2183,10 +2799,16 @@ export default function Home() {
                           : startRecording
                       }
                       disabled={
-                        isBusy &&
-                        !isRecording
+                        (
+                          isBusy &&
+                          !isRecording
+                        ) ||
+                        (
+                          limitReached &&
+                          !isRecording
+                        )
                       }
-                      className="rounded-full"
+                      className="rounded-full disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label={
                         isRecording
                           ? "Stop recording"
@@ -2196,7 +2818,14 @@ export default function Home() {
 
                       <div className="vtn-record-orb vtn-mobile-record-orb">
 
-                        <div className="vtn-record-core vtn-mobile-record-core flex items-center justify-center text-white">
+                        <div
+                          className={`vtn-record-core vtn-mobile-record-core flex items-center justify-center text-white ${
+                            isPro &&
+                            !isRecording
+                              ? "shadow-[0_0_50px_rgba(139,92,246,0.45),0_0_90px_rgba(34,211,238,0.12)]"
+                              : ""
+                          }`}
+                        >
 
                           {isRecording ? (
                             <span className="h-5 w-5 rounded-[5px] bg-white" />
@@ -2241,19 +2870,27 @@ export default function Home() {
 
                     <p className="mt-5 text-sm font-semibold">
 
-                      {isRecording
-                        ? "Listening..."
-                        : isBusy
-                          ? systemLabel()
-                          : "Tap to speak"}
+                      {limitReached
+                        ? "Capture limit reached"
+                        : isRecording
+                          ? "Listening..."
+                          : isBusy
+                            ? systemLabel()
+                            : "Tap to speak"}
 
                     </p>
 
-                    <p className="mt-2 text-center text-[11px] leading-5 text-[var(--muted)] md:hidden">
+                    <p className="mt-2 max-w-[280px] text-center text-[11px] leading-5 text-[var(--muted)]">
 
-                      {isRecording
-                        ? "Speak naturally, then tap again to stop."
-                        : "Your voice becomes structured knowledge automatically."}
+                      {limitReached
+                        ? isPro
+                          ? "Your monthly Pro allowance will reset next month."
+                          : "Upgrade to Pro to unlock 500 AI captures each month."
+                        : isRecording
+                          ? `Recording can continue for up to ${recordingLimitMinutes} minutes on your ${isPro ? "Pro" : "Free"} plan.`
+                          : isPro
+                            ? "Pro intelligence is active. Speak naturally and capture longer thoughts."
+                            : "Your voice becomes structured knowledge automatically."}
 
                     </p>
 
@@ -2283,6 +2920,19 @@ export default function Home() {
 
                     </div>
 
+                    {limitReached &&
+                      !isPro && (
+                      <button
+                        type="button"
+                        onClick={
+                          handleUpgradeClick
+                        }
+                        className="vtn-primary mt-4 min-h-11 px-5 text-xs"
+                      >
+                        Unlock Pro ✦
+                      </button>
+                    )}
+
                   </div>
 
                   {audioUrl && (
@@ -2303,7 +2953,10 @@ export default function Home() {
                           onClick={
                             retranscribeRecording
                           }
-                          className="vtn-secondary min-h-11 px-3 text-xs"
+                          disabled={
+                            limitReached
+                          }
+                          className="vtn-secondary min-h-11 px-3 text-xs disabled:opacity-40"
                         >
                           Process Again
                         </button>
@@ -2328,7 +2981,7 @@ export default function Home() {
               </section>
 
               {/* =============================================
-                  NOTION DESTINATION
+                  DESTINATION
               ============================================== */}
 
               <section className="vtn-card vtn-mobile-destination p-4 sm:p-5">
@@ -2369,6 +3022,23 @@ export default function Home() {
                     )}
 
                   </div>
+
+                  {isPro && (
+                    <div className="mt-3 flex items-center justify-between rounded-xl border border-violet-500/15 bg-violet-500/[0.05] px-3 py-2">
+
+                      <span className="text-[9px] text-violet-300">
+                        ✦ Pro destination capacity
+                      </span>
+
+                      <span className="text-[9px] font-bold">
+                        up to{" "}
+                        {entitlements
+                          ?.maxNotionDestinations ??
+                          5}
+                      </span>
+
+                    </div>
+                  )}
 
                   {loadingDatabases ? (
                     <p className="mt-4 text-xs text-[var(--muted)]">
@@ -2497,15 +3167,25 @@ export default function Home() {
 
               <div className="relative z-10">
 
-                <div className="hidden md:block">
+                <div className="hidden md:flex md:items-start md:justify-between md:gap-4">
 
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                    Live Workspace
-                  </span>
+                  <div>
 
-                  <h2 className="mt-2 text-2xl font-semibold">
-                    Thought processing
-                  </h2>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                      Live Workspace
+                    </span>
+
+                    <h2 className="mt-2 text-2xl font-semibold">
+                      Thought processing
+                    </h2>
+
+                  </div>
+
+                  {isPro && (
+                    <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 text-[9px] font-black text-violet-300">
+                      ✦ ADVANCED AI
+                    </span>
+                  )}
 
                 </div>
 
@@ -2603,11 +3283,14 @@ export default function Home() {
                         type="submit"
                         disabled={
                           isBusy ||
-                          !transcript.trim()
+                          !transcript.trim() ||
+                          limitReached
                         }
-                        className="vtn-secondary min-h-11 px-4 text-xs"
+                        className="vtn-secondary min-h-11 px-4 text-xs disabled:opacity-40"
                       >
-                        ✦ Structure with AI
+                        {limitReached
+                          ? "Monthly limit reached"
+                          : "✦ Structure with AI"}
                       </button>
 
                       <button
@@ -2629,7 +3312,7 @@ export default function Home() {
 
                 {error && (
                   <div
-                    className="vtn-error mt-4 rounded-xl p-3 text-xs"
+                    className="vtn-error mt-4 rounded-xl p-3 text-xs leading-5"
                     role="alert"
                   >
                     {error}
@@ -2657,11 +3340,19 @@ export default function Home() {
                       </div>
 
                       <p className="mt-4 text-sm font-semibold">
-                        Waiting for a thought
+                        {limitReached
+                          ? "Capture allowance used"
+                          : "Waiting for a thought"}
                       </p>
 
-                      <p className="mt-2 max-w-[250px] text-center text-[11px] leading-5 text-[var(--muted)]">
-                        Tap to speak and your AI-structured note will appear here.
+                      <p className="mt-2 max-w-[270px] text-center text-[11px] leading-5 text-[var(--muted)]">
+                        {limitReached
+                          ? isPro
+                            ? "Your monthly Pro allowance will reset next month."
+                            : "Unlock Pro for 500 captures and longer voice sessions."
+                          : isPro
+                            ? "Advanced AI is ready to structure your next Pro capture."
+                            : "Tap to speak and your AI-structured note will appear here."}
                       </p>
 
                     </div>
@@ -2672,7 +3363,10 @@ export default function Home() {
 
                         <div className="vtn-eyebrow">
                           <span className="vtn-eyebrow-dot" />
-                          AI Structured
+
+                          {isPro
+                            ? "Structured with Pro AI"
+                            : "AI Structured"}
                         </div>
 
                         <span
@@ -2893,7 +3587,6 @@ export default function Home() {
                                       )
                                     }
                                     className="vtn-secondary min-w-10 px-2"
-                                    aria-label="Remove action item"
                                   >
                                     ×
                                   </button>
@@ -2957,6 +3650,98 @@ export default function Home() {
           </div>
 
           {/* =================================================
+              PRO FEATURE PREVIEW
+          ================================================== */}
+
+          {!isPro && (
+            <section className="vtn-card mt-5 overflow-hidden border-violet-500/20 p-5 sm:p-6">
+
+              <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-violet-500/15 blur-3xl" />
+
+              <div className="relative z-10">
+
+                <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
+                  <div className="max-w-xl">
+
+                    <div className="vtn-eyebrow">
+                      <span className="vtn-eyebrow-dot" />
+                      Voice to Notion Pro
+                    </div>
+
+                    <h2 className="mt-3 text-xl font-bold tracking-[-0.03em] sm:text-2xl">
+                      Your voice can do more than become a note.
+                    </h2>
+
+                    <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                      Pro turns Voice to Notion into a deeper capture system with longer recordings, custom modes, smart routing, cloud history and automatic Notion workflows.
+                    </p>
+
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={
+                      handleUpgradeClick
+                    }
+                    className="vtn-primary min-h-12 shrink-0 px-6 text-xs"
+                  >
+                    Explore Pro ✦
+                  </button>
+
+                </div>
+
+                <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+
+                  {[
+                    [
+                      "15 min",
+                      "Long voice captures",
+                    ],
+                    [
+                      "7 modes",
+                      "Task, meeting, study + more",
+                    ],
+                    [
+                      "Smart",
+                      "Destination routing",
+                    ],
+                    [
+                      "Cloud",
+                      "Capture history",
+                    ],
+                  ].map(
+                    (
+                      [
+                        value,
+                        label,
+                      ]
+                    ) => (
+                      <div
+                        key={
+                          label
+                        }
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4"
+                      >
+                        <p className="text-sm font-black text-violet-300">
+                          {value}
+                        </p>
+
+                        <p className="mt-1 text-[9px] leading-4 text-[var(--muted)]">
+                          {label}
+                        </p>
+                      </div>
+                    )
+                  )}
+
+                </div>
+
+              </div>
+
+            </section>
+          )}
+
+          {/* =================================================
               HISTORY
           ================================================== */}
 
@@ -2969,12 +3754,20 @@ export default function Home() {
                 <div>
 
                   <span className="text-[9px] font-semibold uppercase tracking-[0.17em] text-[var(--muted)]">
-                    Memory Vault
+                    {isPro
+                      ? "Pro Memory Vault"
+                      : "Memory Vault"}
                   </span>
 
                   <h2 className="mt-1 text-lg font-semibold md:text-xl">
                     Recent Captures
                   </h2>
+
+                  <p className="mt-1 text-[9px] text-[var(--muted)]">
+                    {isPro
+                      ? `Up to ${historyLimit} local captures · Cloud history coming online with Pro features`
+                      : "Last 10 captures stored locally"}
+                  </p>
 
                 </div>
 
@@ -3008,7 +3801,7 @@ export default function Home() {
                   </p>
 
                   <p className="mt-1 text-[10px] text-[var(--muted)]">
-                    Your last 10 captures are stored locally in this browser.
+                    Start recording to build your capture history.
                   </p>
 
                 </div>
@@ -3088,7 +3881,7 @@ export default function Home() {
         </div>
 
         {/* =================================================
-            MOBILE STICKY SAVE
+            MOBILE SAVE
         ================================================== */}
 
         {note && (
@@ -3099,7 +3892,9 @@ export default function Home() {
               <div className="min-w-0">
 
                 <span className="text-[8px] font-semibold uppercase tracking-[0.13em] text-[var(--muted)]">
-                  Ready to sync
+                  {isPro
+                    ? "✦ Pro capture ready"
+                    : "Ready to sync"}
                 </span>
 
                 <p className="truncate text-xs font-semibold">
@@ -3148,6 +3943,7 @@ export default function Home() {
         )}
 
       </main>
+
     </AuthGate>
   );
 }

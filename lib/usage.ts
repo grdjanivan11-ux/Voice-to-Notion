@@ -1,14 +1,28 @@
-import type { User } from "@supabase/supabase-js";
+import type {
+  User,
+} from "@supabase/supabase-js";
 
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  supabaseAdmin,
+} from "@/lib/supabase-admin";
+
+import {
+  getPlanEntitlements,
+  normalizePlanName,
+  type PlanEntitlements,
+  type PlanName,
+} from "@/lib/entitlements";
 
 /* =========================================================
    VOICE TO NOTION
-   C9.1 — USAGE ENGINE
+   C9.2 — PLAN-AWARE USAGE ENGINE
    ========================================================= */
 
-export const FREE_AI_CAPTURE_LIMIT =
-  30;
+export type PlanStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "canceled";
 
 export type UsageMetric =
   | "ai_captures"
@@ -16,30 +30,88 @@ export type UsageMetric =
   | "notion_saves"
   | "transcription_seconds";
 
+export type UserPlan = {
+  user_id: string;
+
+  plan: PlanName;
+
+  status: PlanStatus;
+
+  stripe_customer_id:
+    | string
+    | null;
+
+  stripe_subscription_id:
+    | string
+    | null;
+
+  current_period_end:
+    | string
+    | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
 export type MonthlyUsage = {
   user_id: string;
+
   period_start: string;
+
   ai_captures: number;
+
   transcriptions: number;
+
   notion_saves: number;
+
   transcription_seconds: number;
+
   created_at: string;
+
   updated_at: string;
 };
 
 export type UsageSummary = {
   periodStart: string;
+
   periodEnd: string;
 
   aiCaptures: number;
+
   transcriptions: number;
+
   notionSaves: number;
+
   transcriptionSeconds: number;
 
   aiCaptureLimit: number;
+
   aiCapturesRemaining: number;
 
   percentageUsed: number;
+
+  limitReached: boolean;
+};
+
+export type PlanSummary = {
+  name: PlanName;
+
+  displayName: string;
+
+  status: PlanStatus;
+
+  currentPeriodEnd:
+    | string
+    | null;
+
+  entitlements:
+    PlanEntitlements;
+};
+
+export type UsageWithPlan = {
+  plan: PlanSummary;
+
+  usage: UsageSummary;
 };
 
 /* =========================================================
@@ -87,7 +159,8 @@ export function getCurrentUsagePeriodEnd() {
    ========================================================= */
 
 export async function getAuthenticatedUser(
-  request: Request
+  request:
+    Request
 ): Promise<User | null> {
   const authorization =
     request.headers.get(
@@ -120,6 +193,7 @@ export async function getAuthenticatedUser(
     data: {
       user,
     },
+
     error,
   } =
     await supabaseAdmin.auth.getUser(
@@ -137,11 +211,170 @@ export async function getAuthenticatedUser(
 }
 
 /* =========================================================
-   READ CURRENT MONTH
+   USER PLAN
+   ========================================================= */
+
+export async function getUserPlan(
+  userId:
+    string
+): Promise<UserPlan> {
+  const {
+    data,
+    error,
+  } =
+    await supabaseAdmin
+      .from(
+        "user_plans"
+      )
+      .select(
+        `
+          user_id,
+          plan,
+          status,
+          stripe_customer_id,
+          stripe_subscription_id,
+          current_period_end,
+          created_at,
+          updated_at
+        `
+      )
+      .eq(
+        "user_id",
+        userId
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    console.error(
+      "PLAN LOOKUP ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Could not load plan."
+    );
+  }
+
+  /*
+    Missing plan rows always fall back to Free.
+
+    We NEVER default users to Pro.
+  */
+
+  if (
+    !data
+  ) {
+    const now =
+      new Date()
+        .toISOString();
+
+    return {
+      user_id:
+        userId,
+
+      plan:
+        "free",
+
+      status:
+        "active",
+
+      stripe_customer_id:
+        null,
+
+      stripe_subscription_id:
+        null,
+
+      current_period_end:
+        null,
+
+      created_at:
+        now,
+
+      updated_at:
+        now,
+    };
+  }
+
+  const status:
+    PlanStatus =
+      data.status ===
+        "trialing" ||
+      data.status ===
+        "past_due" ||
+      data.status ===
+        "canceled"
+        ? data.status
+        : "active";
+
+  return {
+    user_id:
+      data.user_id,
+
+    plan:
+      normalizePlanName(
+        data.plan
+      ),
+
+    status,
+
+    stripe_customer_id:
+      data.stripe_customer_id ??
+      null,
+
+    stripe_subscription_id:
+      data.stripe_subscription_id ??
+      null,
+
+    current_period_end:
+      data.current_period_end ??
+      null,
+
+    created_at:
+      data.created_at,
+
+    updated_at:
+      data.updated_at,
+  };
+}
+
+/* =========================================================
+   EFFECTIVE PLAN
+
+   A stored Pro plan is only treated as Pro while its
+   subscription state is active or trialing.
+
+   Stripe will control these fields in C9.3.
+   ========================================================= */
+
+export function getEffectivePlan(
+  plan:
+    UserPlan
+): PlanName {
+  if (
+    plan.plan ===
+      "pro" &&
+    (
+      plan.status ===
+        "active" ||
+      plan.status ===
+        "trialing"
+    )
+  ) {
+    return "pro";
+  }
+
+  return "free";
+}
+
+/* =========================================================
+   MONTHLY USAGE
    ========================================================= */
 
 export async function getMonthlyUsage(
-  userId: string
+  userId:
+    string
 ): Promise<MonthlyUsage | null> {
   const periodStart =
     getCurrentUsagePeriodStart();
@@ -199,19 +432,25 @@ export async function getMonthlyUsage(
 }
 
 /* =========================================================
-   INCREMENT USAGE
+   INCREMENT
    ========================================================= */
 
 export async function incrementMonthlyUsage(
-  userId: string,
-  metric: UsageMetric,
-  amount = 1
+  userId:
+    string,
+
+  metric:
+    UsageMetric,
+
+  amount =
+    1
 ): Promise<MonthlyUsage> {
   if (
     !Number.isInteger(
       amount
     ) ||
-    amount <= 0
+    amount <=
+      0
   ) {
     throw new Error(
       "Usage amount must be a positive integer."
@@ -254,14 +493,6 @@ export async function incrementMonthlyUsage(
     );
   }
 
-  /*
-    Supabase may return either:
-    - one object
-    - an array containing one object
-
-    depending on how the RPC result is represented.
-  */
-
   const row =
     Array.isArray(
       data
@@ -281,99 +512,194 @@ export async function incrementMonthlyUsage(
 }
 
 /* =========================================================
-   SUMMARY
+   PLAN + USAGE
    ========================================================= */
 
-export async function getUsageSummary(
-  userId: string
-): Promise<UsageSummary> {
-  const usage =
-    await getMonthlyUsage(
-      userId
+export async function getUsageWithPlan(
+  userId:
+    string
+): Promise<UsageWithPlan> {
+  const [
+    storedPlan,
+    monthlyUsage,
+  ] =
+    await Promise.all([
+      getUserPlan(
+        userId
+      ),
+
+      getMonthlyUsage(
+        userId
+      ),
+    ]);
+
+  const effectivePlan =
+    getEffectivePlan(
+      storedPlan
+    );
+
+  const entitlements =
+    getPlanEntitlements(
+      effectivePlan
     );
 
   const aiCaptures =
-    usage?.ai_captures ??
+    monthlyUsage
+      ?.ai_captures ??
     0;
 
   const transcriptions =
-    usage?.transcriptions ??
+    monthlyUsage
+      ?.transcriptions ??
     0;
 
   const notionSaves =
-    usage?.notion_saves ??
+    monthlyUsage
+      ?.notion_saves ??
     0;
 
   const transcriptionSeconds =
-    usage?.transcription_seconds ??
+    monthlyUsage
+      ?.transcription_seconds ??
     0;
 
-  const remaining =
+  const aiCaptureLimit =
+    entitlements
+      .monthlyAiCaptures;
+
+  const aiCapturesRemaining =
     Math.max(
-      FREE_AI_CAPTURE_LIMIT -
+      aiCaptureLimit -
         aiCaptures,
       0
     );
 
   const percentageUsed =
-    Math.min(
-      Math.round(
-        (
-          aiCaptures /
-          FREE_AI_CAPTURE_LIMIT
-        ) *
+    aiCaptureLimit <=
+    0
+      ? 100
+      : Math.min(
+          Math.round(
+            (
+              aiCaptures /
+              aiCaptureLimit
+            ) *
+              100
+          ),
           100
-      ),
-      100
-    );
+        );
+
+  const limitReached =
+    aiCaptures >=
+    aiCaptureLimit;
 
   return {
-    periodStart:
-      getCurrentUsagePeriodStart(),
+    plan: {
+      name:
+        effectivePlan,
 
-    periodEnd:
-      getCurrentUsagePeriodEnd(),
+      displayName:
+        entitlements
+          .displayName,
 
-    aiCaptures,
+      status:
+        storedPlan.status,
 
-    transcriptions,
+      currentPeriodEnd:
+        storedPlan
+          .current_period_end,
 
-    notionSaves,
+      entitlements,
+    },
 
-    transcriptionSeconds,
+    usage: {
+      periodStart:
+        getCurrentUsagePeriodStart(),
 
-    aiCaptureLimit:
-      FREE_AI_CAPTURE_LIMIT,
+      periodEnd:
+        getCurrentUsagePeriodEnd(),
 
-    aiCapturesRemaining:
-      remaining,
+      aiCaptures,
 
-    percentageUsed,
+      transcriptions,
+
+      notionSaves,
+
+      transcriptionSeconds,
+
+      aiCaptureLimit,
+
+      aiCapturesRemaining,
+
+      percentageUsed,
+
+      limitReached,
+    },
   };
 }
 
 /* =========================================================
-   LIMIT HELPERS
-
-   We are NOT enforcing the limit yet.
-
-   C9.1 tracks usage first.
-   C9.2 will connect this limit to plan enforcement.
+   BACKWARD-COMPATIBLE SUMMARY
    ========================================================= */
 
-export async function hasReachedFreeCaptureLimit(
-  userId: string
-) {
-  const usage =
-    await getMonthlyUsage(
+export async function getUsageSummary(
+  userId:
+    string
+): Promise<UsageSummary> {
+  const result =
+    await getUsageWithPlan(
       userId
     );
 
-  return (
-    (
-      usage?.ai_captures ??
-      0
-    ) >=
-    FREE_AI_CAPTURE_LIMIT
-  );
+  return result.usage;
+}
+
+/* =========================================================
+   CAPTURE LIMIT
+   ========================================================= */
+
+export async function hasReachedCaptureLimit(
+  userId:
+    string
+) {
+  const result =
+    await getUsageWithPlan(
+      userId
+    );
+
+  return {
+    reached:
+      result.usage
+        .limitReached,
+
+    plan:
+      result.plan,
+
+    usage:
+      result.usage,
+  };
+}
+
+/* =========================================================
+   RECORDING LIMIT
+   ========================================================= */
+
+export async function getRecordingLimit(
+  userId:
+    string
+) {
+  const result =
+    await getUsageWithPlan(
+      userId
+    );
+
+  return {
+    plan:
+      result.plan.name,
+
+    maxRecordingSeconds:
+      result.plan
+        .entitlements
+        .maxRecordingSeconds,
+  };
 }

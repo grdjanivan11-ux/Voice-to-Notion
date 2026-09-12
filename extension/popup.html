@@ -27,7 +27,10 @@
          TOP HUD
     =================================================== -->
 
-    <header class="top-hud">
+    <header
+      id="topHud"
+      class="top-hud"
+    >
 
       <div class="brand">
 
@@ -37,9 +40,21 @@
 
         <div class="brand-copy">
 
-          <strong>
-            Voice to Notion
-          </strong>
+          <div class="brand-title-row">
+
+            <strong>
+              Voice to Notion
+            </strong>
+
+            <span
+              id="headerProBadge"
+              class="header-pro-badge"
+              hidden
+            >
+              ✦ PRO
+            </span>
+
+          </div>
 
           <div class="system-state">
 
@@ -212,7 +227,7 @@
     </section>
 
     <!-- ==================================================
-         APP CONTENT
+         AUTHENTICATED APP
     =================================================== -->
 
     <div
@@ -221,7 +236,7 @@
     >
 
       <!-- ================================================
-           USAGE
+           PLAN + USAGE
       ================================================= -->
 
       <section
@@ -229,11 +244,20 @@
         class="panel usage-panel"
       >
 
+        <div
+          id="proTopLine"
+          class="pro-top-line"
+          hidden
+        ></div>
+
         <div class="usage-header">
 
           <div>
 
-            <span class="panel-kicker">
+            <span
+              id="usageKicker"
+              class="panel-kicker"
+            >
               Monthly Usage
             </span>
 
@@ -254,15 +278,27 @@
 
           </div>
 
-          <button
-            id="refreshUsageButton"
-            class="usage-refresh"
-            type="button"
-            aria-label="Refresh usage"
-            title="Refresh usage"
-          >
-            ↻
-          </button>
+          <div class="usage-header-actions">
+
+            <button
+              id="openPlanButton"
+              class="plan-button"
+              type="button"
+            >
+              Plan
+            </button>
+
+            <button
+              id="refreshUsageButton"
+              class="usage-refresh"
+              type="button"
+              aria-label="Refresh usage"
+              title="Refresh usage"
+            >
+              ↻
+            </button>
+
+          </div>
 
         </div>
 
@@ -320,7 +356,10 @@
 
           </div>
 
-          <div class="usage-progress">
+          <div
+            id="usageProgress"
+            class="usage-progress"
+          >
 
             <div
               id="usageProgressBar"
@@ -369,6 +408,42 @@
 
           </div>
 
+          <div
+            id="limitWarning"
+            class="limit-warning"
+            hidden
+          >
+
+            <div class="limit-warning-top">
+
+              <div class="limit-icon">
+                !
+              </div>
+
+              <div>
+
+                <strong>
+                  Monthly limit reached
+                </strong>
+
+                <p id="limitWarningText">
+                  Your capture allowance has been used.
+                </p>
+
+              </div>
+
+            </div>
+
+            <button
+              id="limitUpgradeButton"
+              class="button button-primary full-button"
+              type="button"
+            >
+              Unlock Voice to Notion Pro ✦
+            </button>
+
+          </div>
+
         </div>
 
         <div
@@ -376,6 +451,207 @@
           class="message usage-message"
           hidden
         ></div>
+
+      </section>
+
+      <!-- ================================================
+           PLAN CENTER
+      ================================================= -->
+
+      <section
+        id="planCenter"
+        class="panel plan-center"
+        hidden
+      >
+
+        <div class="plan-center-header">
+
+          <div>
+
+            <span class="panel-kicker">
+              Plan Center
+            </span>
+
+            <h2 id="planCenterTitle">
+              Unlock your full capture system
+            </h2>
+
+          </div>
+
+          <button
+            id="closePlanButton"
+            class="close-plan-button"
+            type="button"
+            aria-label="Close plan center"
+          >
+            ×
+          </button>
+
+        </div>
+
+        <div class="plan-card plan-card-free">
+
+          <div class="plan-card-title">
+
+            <strong>
+              Free
+            </strong>
+
+            <span
+              id="freeCurrentBadge"
+              class="current-plan-badge"
+            >
+              CURRENT
+            </span>
+
+          </div>
+
+          <div class="plan-big-number">
+            30
+            <span>
+              captures / month
+            </span>
+          </div>
+
+          <div class="plan-features">
+            <span>✓ 2-minute recordings</span>
+            <span>✓ 1 Notion destination</span>
+            <span>✓ Standard AI structuring</span>
+            <span>✓ Last 10 local captures</span>
+          </div>
+
+        </div>
+
+        <div class="plan-card plan-card-pro">
+
+          <div class="pro-card-glow"></div>
+
+          <div class="plan-card-content">
+
+            <div class="plan-card-title">
+
+              <strong>
+                ✦ Pro
+              </strong>
+
+              <span
+                id="proPlanBadge"
+                class="premium-plan-badge"
+              >
+                PREMIUM
+              </span>
+
+            </div>
+
+            <div class="plan-big-number">
+              500
+              <span>
+                captures / month
+              </span>
+            </div>
+
+            <div class="plan-features pro-features">
+              <span>✦ 15-minute recordings</span>
+              <span>✦ Up to 5 Notion destinations</span>
+              <span>✦ Advanced AI intelligence</span>
+              <span>✦ Cloud capture history</span>
+              <span>✦ Custom capture modes</span>
+              <span>✦ Smart destination routing</span>
+              <span>✦ Auto-sync workflows</span>
+              <span>✦ Custom AI instructions</span>
+            </div>
+
+            <button
+              id="upgradeButton"
+              class="button button-primary full-button"
+              type="button"
+            >
+              Upgrade to Pro ✦
+            </button>
+
+          </div>
+
+        </div>
+
+        <div
+          id="upgradeMessage"
+          class="upgrade-message"
+          hidden
+        ></div>
+
+      </section>
+
+      <!-- ================================================
+           PRO PREVIEW
+      ================================================= -->
+
+      <section
+        id="proPreview"
+        class="panel pro-preview"
+      >
+
+        <div class="pro-preview-header">
+
+          <div>
+
+            <span class="panel-kicker">
+              Voice to Notion Pro
+            </span>
+
+            <h2>
+              Capture without friction.
+            </h2>
+
+          </div>
+
+          <div class="pro-symbol">
+            ✦
+          </div>
+
+        </div>
+
+        <p class="pro-preview-copy">
+          Longer recordings, advanced AI and smarter Notion workflows.
+        </p>
+
+        <div class="pro-mini-grid">
+
+          <div>
+            <strong>
+              15m
+            </strong>
+            <span>
+              recordings
+            </span>
+          </div>
+
+          <div>
+            <strong>
+              500
+            </strong>
+            <span>
+              captures
+            </span>
+          </div>
+
+          <div>
+            <strong>
+              Smart
+            </strong>
+            <span>
+              routing
+            </span>
+          </div>
+
+        </div>
+
+        <button
+          id="exploreProButton"
+          class="button button-secondary full-button"
+          type="button"
+        >
+          Explore Pro ✦
+        </button>
 
       </section>
 
@@ -392,7 +668,10 @@
 
           <div>
 
-            <span class="panel-kicker">
+            <span
+              id="voiceKicker"
+              class="panel-kicker"
+            >
               Voice Core
             </span>
 
@@ -402,12 +681,20 @@
 
           </div>
 
-          <span
-            id="timer"
-            class="timer"
-          >
-            00:00
-          </span>
+          <div class="voice-limit">
+
+            <span
+              id="timer"
+              class="timer"
+            >
+              00:00
+            </span>
+
+            <span id="recordingLimitLabel">
+              max 2m
+            </span>
+
+          </div>
 
         </div>
 
@@ -508,6 +795,15 @@
             <span></span>
           </div>
 
+          <button
+            id="voiceUpgradeButton"
+            class="button button-primary voice-upgrade-button"
+            type="button"
+            hidden
+          >
+            Unlock Pro ✦
+          </button>
+
         </div>
 
         <div
@@ -564,6 +860,20 @@
             Loading
           </span>
 
+        </div>
+
+        <div
+          id="proDestinationNotice"
+          class="pro-destination-notice"
+          hidden
+        >
+          <span>
+            ✦ Pro destination capacity
+          </span>
+
+          <strong id="proDestinationLimit">
+            up to 5
+          </strong>
         </div>
 
         <div
@@ -736,7 +1046,10 @@
 
           <div>
 
-            <span class="panel-kicker">
+            <span
+              id="structuredKicker"
+              class="panel-kicker"
+            >
               AI Structured
             </span>
 

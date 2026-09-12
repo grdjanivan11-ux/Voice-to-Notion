@@ -1,25 +1,21 @@
 import OpenAI from "openai";
-import { NextResponse } from "next/server";
+
+import {
+  NextResponse,
+} from "next/server";
 
 import {
   getAuthenticatedUser,
+  hasReachedCaptureLimit,
   incrementMonthlyUsage,
 } from "@/lib/usage";
 
-const openai = new OpenAI({
-  apiKey:
-    process.env.OPENAI_API_KEY,
-});
-
-/* =========================================================
-   VOICE TO NOTION
-   TRANSCRIPTION API
-
-   C9.1:
-   - requires authenticated user
-   - counts successful transcriptions
-   - tracks recorded seconds when supplied
-   ========================================================= */
+const openai =
+  new OpenAI({
+    apiKey:
+      process.env
+        .OPENAI_API_KEY,
+  });
 
 export async function POST(
   request: Request
@@ -45,6 +41,42 @@ export async function POST(
         {
           status:
             401,
+        }
+      );
+    }
+
+    /* =====================================================
+       PLAN LIMIT
+       ===================================================== */
+
+    const limit =
+      await hasReachedCaptureLimit(
+        user.id
+      );
+
+    if (
+      limit.reached
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            limit.plan.name ===
+            "free"
+              ? "You have used all 30 AI captures included in your Free plan this month."
+              : "You have reached your monthly Pro AI capture allowance.",
+
+          code:
+            "PLAN_LIMIT_REACHED",
+
+          plan:
+            limit.plan.name,
+
+          usage:
+            limit.usage,
+        },
+        {
+          status:
+            429,
         }
       );
     }
@@ -100,10 +132,6 @@ export async function POST(
       );
     }
 
-    /* =====================================================
-       RECORDING DURATION
-       ===================================================== */
-
     let durationSeconds =
       0;
 
@@ -133,7 +161,7 @@ export async function POST(
     }
 
     /* =====================================================
-       MOCK MODE
+       MOCK
        ===================================================== */
 
     const useMockAI =
@@ -144,12 +172,6 @@ export async function POST(
     if (
       useMockAI
     ) {
-      /*
-        Mock requests still represent
-        a successful product operation,
-        so we track them while testing.
-      */
-
       await incrementMonthlyUsage(
         user.id,
         "transcriptions",
@@ -177,7 +199,7 @@ export async function POST(
     }
 
     /* =====================================================
-       OPENAI CONFIG
+       OPENAI
        ===================================================== */
 
     if (
@@ -195,29 +217,6 @@ export async function POST(
         }
       );
     }
-
-    console.log(
-      "Transcribing audio:",
-      {
-        userId:
-          user.id,
-
-        name:
-          audio.name,
-
-        type:
-          audio.type,
-
-        size:
-          audio.size,
-
-        durationSeconds,
-      }
-    );
-
-    /* =====================================================
-       OPENAI TRANSCRIPTION
-       ===================================================== */
 
     const transcription =
       await openai.audio.transcriptions.create(
@@ -251,8 +250,6 @@ export async function POST(
 
     /* =====================================================
        USAGE
-
-       Only count successful transcription.
        ===================================================== */
 
     await incrementMonthlyUsage(
@@ -272,16 +269,15 @@ export async function POST(
       );
     }
 
-    /* =====================================================
-       RESPONSE
-       ===================================================== */
-
     return NextResponse.json({
       transcript,
+
       mock:
         false,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "TRANSCRIPTION API ERROR:",
       error
@@ -301,42 +297,6 @@ export async function POST(
         {
           status:
             429,
-        }
-      );
-    }
-
-    if (
-      error instanceof
-        OpenAI.APIError &&
-      error.status ===
-        401
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "OpenAI API authentication failed.",
-        },
-        {
-          status:
-            401,
-        }
-      );
-    }
-
-    if (
-      error instanceof
-        Error &&
-      error.message ===
-        "Could not update usage."
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Your transcription succeeded, but usage tracking failed. Please try again.",
-        },
-        {
-          status:
-            500,
         }
       );
     }

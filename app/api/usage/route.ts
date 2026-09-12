@@ -1,23 +1,26 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse,
+} from "next/server";
 
 import {
   getAuthenticatedUser,
-  getUsageSummary,
+  getUsageWithPlan,
 } from "@/lib/usage";
 
 /* =========================================================
    VOICE TO NOTION
-   C9.1 — CURRENT USER USAGE API
+   C9.2 — PLAN + ENTITLEMENTS + USAGE
 
    GET /api/usage
    ========================================================= */
 
 export async function GET(
-  request: Request
+  request:
+    Request
 ) {
   try {
     /* =====================================================
-       AUTHENTICATE USER
+       AUTH
        ===================================================== */
 
     const user =
@@ -44,11 +47,11 @@ export async function GET(
     }
 
     /* =====================================================
-       LOAD MONTHLY USAGE
+       PLAN + USAGE
        ===================================================== */
 
-    const usage =
-      await getUsageSummary(
+    const result =
+      await getUsageWithPlan(
         user.id
       );
 
@@ -61,11 +64,37 @@ export async function GET(
         true,
 
       plan:
-        "free",
+        result.plan.name,
 
-      usage,
+      planStatus:
+        result.plan.status,
+
+      planDetails: {
+        name:
+          result.plan.name,
+
+        displayName:
+          result.plan
+            .displayName,
+
+        status:
+          result.plan.status,
+
+        currentPeriodEnd:
+          result.plan
+            .currentPeriodEnd,
+      },
+
+      entitlements:
+        result.plan
+          .entitlements,
+
+      usage:
+        result.usage,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "USAGE API ERROR:",
       error

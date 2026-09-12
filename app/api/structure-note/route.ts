@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 
-import { z } from "zod";
+import {
+  z,
+} from "zod";
 
 import {
   zodTextFormat,
@@ -12,12 +14,9 @@ import {
 
 import {
   getAuthenticatedUser,
+  hasReachedCaptureLimit,
   incrementMonthlyUsage,
 } from "@/lib/usage";
-
-/* =========================================================
-   OPENAI
-   ========================================================= */
 
 const openai =
   new OpenAI({
@@ -25,10 +24,6 @@ const openai =
       process.env
         .OPENAI_API_KEY,
   });
-
-/* =========================================================
-   CATEGORIES
-   ========================================================= */
 
 const ALLOWED_CATEGORIES =
   [
@@ -46,10 +41,6 @@ const ALLOWED_CATEGORIES =
     "Reminder",
     "Other",
   ] as const;
-
-/* =========================================================
-   STRUCTURED OUTPUT
-   ========================================================= */
 
 const CapturedNoteSchema =
   z.object({
@@ -85,10 +76,6 @@ const CapturedNoteSchema =
         .nullable(),
   });
 
-/* =========================================================
-   POST
-   ========================================================= */
-
 export async function POST(
   request: Request
 ) {
@@ -113,6 +100,42 @@ export async function POST(
         {
           status:
             401,
+        }
+      );
+    }
+
+    /* =====================================================
+       LIMIT
+       ===================================================== */
+
+    const limit =
+      await hasReachedCaptureLimit(
+        user.id
+      );
+
+    if (
+      limit.reached
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            limit.plan.name ===
+            "free"
+              ? "You have used all 30 AI captures included in your Free plan this month."
+              : "You have reached your monthly Pro AI capture allowance.",
+
+          code:
+            "PLAN_LIMIT_REACHED",
+
+          plan:
+            limit.plan.name,
+
+          usage:
+            limit.usage,
+        },
+        {
+          status:
+            429,
         }
       );
     }
@@ -163,7 +186,7 @@ export async function POST(
     }
 
     /* =====================================================
-       MOCK MODE
+       MOCK
        ===================================================== */
 
     const useMockAI =
@@ -193,19 +216,11 @@ export async function POST(
           "High",
 
         dueDate:
-          "2026-09-11",
+          null,
 
         mock:
           true,
       };
-
-      /*
-        AI captures are our primary
-        SaaS usage metric.
-
-        Only increment after a
-        successful structured result.
-      */
 
       await incrementMonthlyUsage(
         user.id,
@@ -219,7 +234,7 @@ export async function POST(
     }
 
     /* =====================================================
-       OPENAI CONFIG
+       OPENAI
        ===================================================== */
 
     if (
@@ -244,10 +259,6 @@ export async function POST(
         .split(
           "T"
         )[0];
-
-    /* =====================================================
-       AI
-       ===================================================== */
 
     const response =
       await openai.responses.parse(
@@ -285,42 +296,18 @@ TITLE
 
 Create a short natural title that represents the main idea.
 
-Examples:
-
-"Remember to buy milk tomorrow."
-→ "Buy milk tomorrow"
-
-"I've been thinking about creating an AI fitness app."
-→ "AI fitness app idea"
-
-Avoid robotic titles such as:
-"The speaker wants to..."
-
 SUMMARY
 
 Summarize what the user actually said.
-
 Preserve important context.
-
 Do not invent facts.
 
 ACTION ITEMS
 
 Extract only genuine actionable tasks.
 
-Example:
-
-"Buy milk and call Mark."
-→
-[
-  "Buy milk",
-  "Call Mark"
-]
-
-If the speaker is sharing information, knowledge, an idea,
-an observation or a thought and there are no genuine tasks:
-
-→ []
+If there are no genuine tasks:
+[]
 
 Never invent tasks.
 
@@ -343,32 +330,6 @@ Reminder
 Other
 
 Normalize related meanings.
-
-Homework, exams and schoolwork
-→ Study
-
-Business, clients and job responsibilities
-→ Work
-
-Startup ideas, product ideas and creative concepts
-→ Idea
-
-Groceries and things to purchase
-→ Shopping
-
-Trips, hotels, flights and destinations
-→ Travel
-
-Research notes and factual investigation
-→ Research
-
-Appointments and "remember to..." notes
-→ Reminder
-
-If none clearly applies
-→ Other
-
-Never create a category outside this list.
 
 PRIORITY
 
@@ -399,22 +360,6 @@ Low:
 - no urgency
 - no meaningful deadline
 
-Examples:
-
-"Submit the application tonight."
-→ High
-
-"Finish homework by Friday."
-→ Medium
-
-"I have an idea for an app."
-→ Low
-
-"Remember this quote."
-→ Low
-
-Do not mark everything High.
-
 DUE DATE
 
 Return:
@@ -426,23 +371,6 @@ or:
 null
 
 Resolve relative dates using ${currentDate}.
-
-Examples:
-
-today
-→ ${currentDate}
-
-tomorrow
-→ next calendar day
-
-in two days
-→ current date + 2 days
-
-next Friday
-→ next matching Friday
-
-If there is no clear or reasonably implied deadline:
-→ null
 
 Never invent a deadline.
 
@@ -496,12 +424,7 @@ IMPORTANT:
     }
 
     /* =====================================================
-       USAGE
-
-       This is our main billable metric.
-
-       A capture counts ONLY after
-       successful AI structuring.
+       COUNT SUCCESSFUL CAPTURE
        ===================================================== */
 
     await incrementMonthlyUsage(
@@ -510,17 +433,15 @@ IMPORTANT:
       1
     );
 
-    /* =====================================================
-       RESPONSE
-       ===================================================== */
-
     return NextResponse.json({
       ...note,
 
       mock:
         false,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "STRUCTURE NOTE ERROR:",
       error
@@ -540,42 +461,6 @@ IMPORTANT:
         {
           status:
             429,
-        }
-      );
-    }
-
-    if (
-      error instanceof
-        OpenAI.APIError &&
-      error.status ===
-        401
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "OpenAI API authentication failed.",
-        },
-        {
-          status:
-            401,
-        }
-      );
-    }
-
-    if (
-      error instanceof
-        Error &&
-      error.message ===
-        "Could not update usage."
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "The note was structured, but usage tracking failed. Please try again.",
-        },
-        {
-          status:
-            500,
         }
       );
     }
