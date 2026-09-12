@@ -8,13 +8,20 @@ import {
 } from "react";
 
 import AuthGate from "@/components/AuthGate";
+import ThemeToggle from "@/components/ThemeToggle";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+
+type Priority =
+  | "Low"
+  | "Medium"
+  | "High";
 
 type StructuredNote = {
   title: string;
   summary: string;
   actionItems: string[];
   category: string;
+  priority: Priority;
   dueDate: string | null;
   mock?: boolean;
 };
@@ -51,13 +58,16 @@ type NotionDataSource = {
 
 type NotionDatabasesResponse = {
   success?: boolean;
+  connected?: boolean;
 
   workspace?: {
     id: string;
     name: string | null;
   };
 
-  selectedDataSourceId?: string | null;
+  selectedDataSourceId?:
+    | string
+    | null;
 
   dataSources?: NotionDataSource[];
 
@@ -74,7 +84,6 @@ const HISTORY_STORAGE_KEY =
   "voice-to-notion-history";
 
 const MAX_HISTORY_ITEMS = 10;
-
 
 export default function Home() {
   const [transcript, setTranscript] =
@@ -148,9 +157,15 @@ export default function Home() {
     setHistoryLoaded,
   ] = useState(false);
 
-  /*
-    NOTION DATABASE PICKER
-  */
+  const [
+    accountEmail,
+    setAccountEmail,
+  ] = useState("");
+
+  const [
+    signingOut,
+    setSigningOut,
+  ] = useState(false);
 
   const [
     notionWorkspaceName,
@@ -226,9 +241,25 @@ export default function Home() {
     processingStep ===
       "saving";
 
-  /*
-    LOAD HISTORY
-  */
+  const destinationChanged =
+    selectedDataSourceId !==
+    savedDataSourceId;
+
+  useEffect(() => {
+    async function loadAccount() {
+      const {
+        data: { session },
+      } =
+        await supabaseBrowser.auth.getSession();
+
+      setAccountEmail(
+        session?.user.email ??
+          ""
+      );
+    }
+
+    loadAccount();
+  }, []);
 
   useEffect(() => {
     try {
@@ -243,9 +274,23 @@ export default function Home() {
             storedHistory
           ) as CaptureHistoryItem[];
 
-        setHistory(
-          parsedHistory
-        );
+        const normalized =
+          parsedHistory.map(
+            (item) => ({
+              ...item,
+
+              note: {
+                ...item.note,
+
+                priority:
+                  item.note
+                    .priority ??
+                  "Low",
+              },
+            })
+          );
+
+        setHistory(normalized);
       }
     } catch (err) {
       console.error(
@@ -257,44 +302,23 @@ export default function Home() {
     }
   }, []);
 
-  /*
-    SAVE HISTORY
-  */
-
   useEffect(() => {
     if (!historyLoaded) {
       return;
     }
 
-    try {
-      localStorage.setItem(
-        HISTORY_STORAGE_KEY,
-        JSON.stringify(
-          history
-        )
-      );
-    } catch (err) {
-      console.error(
-        "HISTORY SAVE ERROR:",
-        err
-      );
-    }
+    localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(history)
+    );
   }, [
     history,
     historyLoaded,
   ]);
 
-  /*
-    LOAD NOTION DATABASES
-  */
-
   useEffect(() => {
     loadNotionDatabases();
   }, []);
-
-  /*
-    CLEANUP AUDIO
-  */
 
   useEffect(() => {
     return () => {
@@ -314,119 +338,140 @@ export default function Home() {
     };
   }, [audioUrl]);
 
-  async function loadNotionDatabases() {
-  setLoadingDatabases(true);
-
-  setNotionDatabaseError("");
-  setNotionDatabaseMessage("");
-
-  try {
-    const {
-      data: { session },
-    } = await supabaseBrowser.auth.getSession();
-
-    if (!session) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const response = await fetch(
-      "/api/notion/databases",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      }
-    );
-
-    const data =
-      (await response.json()) as NotionDatabasesResponse;
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-          "Could not load Notion databases."
-      );
-    }
-
-    const dataSources =
-      data.dataSources ?? [];
-
-    setNotionDataSources(
-      dataSources
-    );
-
-    setNotionWorkspaceName(
-      data.workspace?.name ??
-        null
-    );
-
-    const storedSelection =
-      data.selectedDataSourceId ??
-      "";
-
-    const validSelection =
-      dataSources.some(
-        (source) =>
-          source.id ===
-          storedSelection
-      )
-        ? storedSelection
-        : "";
-
-    setSelectedDataSourceId(
-      validSelection
-    );
-
-    setSavedDataSourceId(
-      validSelection
-    );
-  } catch (err) {
-    console.error(
-      "LOAD NOTION DATABASES ERROR:",
-      err
-    );
-
-    if (err instanceof Error) {
-      setNotionDatabaseError(
-        err.message
-      );
-    } else {
-      setNotionDatabaseError(
-        "Could not load Notion databases."
-      );
-    }
-  } finally {
-    setLoadingDatabases(false);
-  }
-}
-
-  async function connectNotion() {
+  async function signOut() {
     try {
-      setNotionDatabaseError("");
-      setNotionDatabaseMessage("");
+      setSigningOut(true);
 
       const {
+        error: signOutError,
+      } =
+        await supabaseBrowser.auth.signOut();
+
+      if (signOutError) {
+        throw signOutError;
+      }
+
+      window.location.replace(
+        "/login"
+      );
+    } catch (err) {
+      console.error(
+        "SIGN OUT ERROR:",
+        err
+      );
+
+      setSigningOut(false);
+    }
+  }
+
+  async function loadNotionDatabases() {
+    setLoadingDatabases(true);
+    setNotionDatabaseError("");
+    setNotionDatabaseMessage("");
+
+    try {
+      const {
         data: { session },
-      } = await supabaseBrowser.auth.getSession();
+      } =
+        await supabaseBrowser.auth.getSession();
 
       if (!session) {
-        window.location.href = "/login";
+        window.location.href =
+          "/login";
+
         return;
       }
 
-      const response = await fetch(
-        "/api/notion/oauth/start",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
+      const response =
+        await fetch(
+          "/api/notion/databases",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+      const data =
+        (await response.json()) as NotionDatabasesResponse;
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Could not load Notion databases."
+        );
+      }
+
+      const sources =
+        data.dataSources ?? [];
+
+      setNotionDataSources(
+        sources
       );
 
-      const data = await response.json();
+      setNotionWorkspaceName(
+        data.workspace?.name ??
+          null
+      );
+
+      const stored =
+        data.selectedDataSourceId ??
+        "";
+
+      const valid =
+        sources.some(
+          (source) =>
+            source.id === stored
+        )
+          ? stored
+          : "";
+
+      setSelectedDataSourceId(
+        valid
+      );
+
+      setSavedDataSourceId(
+        valid
+      );
+    } catch (err) {
+      setNotionDatabaseError(
+        err instanceof Error
+          ? err.message
+          : "Could not load Notion databases."
+      );
+    } finally {
+      setLoadingDatabases(false);
+    }
+  }
+
+  async function connectNotion() {
+    try {
+      const {
+        data: { session },
+      } =
+        await supabaseBrowser.auth.getSession();
+
+      if (!session) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          "/api/notion/oauth/start",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -435,117 +480,92 @@ export default function Home() {
         );
       }
 
-      if (!data.authorizationUrl) {
-        throw new Error(
-          "No Notion authorization URL was returned."
-        );
-      }
-
       window.location.href =
         data.authorizationUrl;
     } catch (err) {
-      console.error(
-        "CONNECT NOTION ERROR:",
-        err
+      setNotionDatabaseError(
+        err instanceof Error
+          ? err.message
+          : "Could not connect Notion."
       );
-
-      if (err instanceof Error) {
-        setNotionDatabaseError(
-          err.message
-        );
-      } else {
-        setNotionDatabaseError(
-          "Could not connect Notion."
-        );
-      }
     }
   }
 
   async function saveNotionDatabaseSelection() {
-  if (!selectedDataSourceId) {
-    setNotionDatabaseError(
-      "Choose a Notion database first."
-    );
-
-    return;
-  }
-
-  setSavingDatabase(true);
-
-  setNotionDatabaseError("");
-  setNotionDatabaseMessage("");
-
-  try {
-    const {
-      data: { session },
-    } =
-      await supabaseBrowser.auth.getSession();
-
-    if (!session) {
-      window.location.href =
-        "/login";
+    if (!selectedDataSourceId) {
+      setNotionDatabaseError(
+        "Choose a Notion database first."
+      );
 
       return;
     }
 
-    const response =
-      await fetch(
-        "/api/notion/database/select",
-        {
-          method: "POST",
+    setSavingDatabase(true);
+    setNotionDatabaseError("");
+    setNotionDatabaseMessage("");
 
-          headers: {
-            "Content-Type":
-              "application/json",
+    try {
+      const {
+        data: { session },
+      } =
+        await supabaseBrowser.auth.getSession();
 
-            Authorization:
-              `Bearer ${session.access_token}`,
-          },
+      if (!session) {
+        window.location.href =
+          "/login";
 
-          body: JSON.stringify({
-            dataSourceId:
-              selectedDataSourceId,
-          }),
-        }
+        return;
+      }
+
+      const response =
+        await fetch(
+          "/api/notion/database/select",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+
+            body:
+              JSON.stringify({
+                dataSourceId:
+                  selectedDataSourceId,
+              }),
+          }
+        );
+
+      const data =
+        (await response.json()) as NotionDatabaseSelectionResponse;
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Could not save destination."
+        );
+      }
+
+      setSavedDataSourceId(
+        selectedDataSourceId
       );
 
-    const data =
-      (await response.json()) as NotionDatabaseSelectionResponse;
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-          "Could not save the Notion destination."
+      setNotionDatabaseMessage(
+        "Destination synchronized."
       );
-    }
-
-    setSavedDataSourceId(
-      selectedDataSourceId
-    );
-
-    setNotionDatabaseMessage(
-      "Notion destination saved."
-    );
-  } catch (err) {
-    console.error(
-      "SAVE NOTION DATABASE ERROR:",
-      err
-    );
-
-    if (err instanceof Error) {
+    } catch (err) {
       setNotionDatabaseError(
-        err.message
+        err instanceof Error
+          ? err.message
+          : "Could not save destination."
       );
-    } else {
-      setNotionDatabaseError(
-        "Could not save the Notion destination."
-      );
+    } finally {
+      setSavingDatabase(false);
     }
-  } finally {
-    setSavingDatabase(false);
   }
-}
-
 
   function resetNotionState() {
     setNotionSaved(false);
@@ -556,9 +576,10 @@ export default function Home() {
     structuredNote: StructuredNote,
     sourceTranscript: string
   ) {
-    const historyItem: CaptureHistoryItem =
+    const item: CaptureHistoryItem =
       {
-        id: crypto.randomUUID(),
+        id:
+          crypto.randomUUID(),
 
         createdAt:
           new Date().toISOString(),
@@ -577,23 +598,17 @@ export default function Home() {
       };
 
     setHistory(
-      (
-        currentHistory
-      ) => {
-        const newHistory =
-          [
-            historyItem,
-            ...currentHistory,
-          ];
-
-        return newHistory.slice(
+      (current) =>
+        [
+          item,
+          ...current,
+        ].slice(
           0,
           MAX_HISTORY_ITEMS
-        );
-      }
+        )
     );
 
-    return historyItem.id;
+    return item.id;
   }
 
   function updateHistoryItem(
@@ -601,10 +616,8 @@ export default function Home() {
     changes: Partial<CaptureHistoryItem>
   ) {
     setHistory(
-      (
-        currentHistory
-      ) =>
-        currentHistory.map(
+      (current) =>
+        current.map(
           (item) =>
             item.id === id
               ? {
@@ -619,9 +632,7 @@ export default function Home() {
   async function startRecording() {
     try {
       setError("");
-
       setNote(null);
-
       setTranscript("");
 
       resetNotionState();
@@ -638,7 +649,6 @@ export default function Home() {
       }
 
       setAudioBlob(null);
-
       setRecordingSeconds(0);
 
       const stream =
@@ -648,22 +658,21 @@ export default function Home() {
           }
         );
 
-      const mediaRecorder =
+      const recorder =
         new MediaRecorder(
           stream
         );
 
       mediaRecorderRef.current =
-        mediaRecorder;
+        recorder;
 
       audioChunksRef.current =
         [];
 
-      mediaRecorder.ondataavailable =
+      recorder.ondataavailable =
         (event) => {
           if (
-            event.data.size >
-            0
+            event.data.size > 0
           ) {
             audioChunksRef.current.push(
               event.data
@@ -671,31 +680,25 @@ export default function Home() {
           }
         };
 
-      mediaRecorder.onstop =
+      recorder.onstop =
         async () => {
           try {
-            const mimeType =
-              mediaRecorder.mimeType ||
-              "audio/webm";
-
-            const recordedBlob =
+            const blob =
               new Blob(
                 audioChunksRef.current,
                 {
                   type:
-                    mimeType,
+                    recorder.mimeType ||
+                    "audio/webm",
                 }
               );
 
             const url =
               URL.createObjectURL(
-                recordedBlob
+                blob
               );
 
-            setAudioBlob(
-              recordedBlob
-            );
-
+            setAudioBlob(blob);
             setAudioUrl(url);
 
             stream
@@ -706,34 +709,22 @@ export default function Home() {
               );
 
             await processRecording(
-              recordedBlob
+              blob
             );
           } catch (err) {
-            console.error(
-              "RECORDING PROCESSING ERROR:",
-              err
-            );
-
             setProcessingStep(
               "idle"
             );
 
-            if (
-              err instanceof
-              Error
-            ) {
-              setError(
-                err.message
-              );
-            } else {
-              setError(
-                "Could not process the recording."
-              );
-            }
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Could not process recording."
+            );
           }
         };
 
-      mediaRecorder.start();
+      recorder.start();
 
       setIsRecording(true);
 
@@ -745,44 +736,36 @@ export default function Home() {
         setInterval(
           () => {
             setRecordingSeconds(
-              (
-                previous
-              ) =>
-                previous +
-                1
+              (previous) =>
+                previous + 1
             );
           },
           1000
         );
-    } catch (err) {
-      console.error(
-        "MICROPHONE ERROR:",
-        err
-      );
-
+    } catch {
       setProcessingStep(
         "idle"
       );
 
       setError(
-        "Could not access the microphone. Check your browser microphone permissions."
+        "Could not access the microphone."
       );
     }
   }
 
   function stopRecording() {
-    const mediaRecorder =
+    const recorder =
       mediaRecorderRef.current;
 
     if (
-      !mediaRecorder ||
-      mediaRecorder.state ===
+      !recorder ||
+      recorder.state ===
         "inactive"
     ) {
       return;
     }
 
-    mediaRecorder.stop();
+    recorder.stop();
 
     setIsRecording(false);
 
@@ -798,50 +781,9 @@ export default function Home() {
     }
   }
 
-  async function processRecording(
-    recordedBlob: Blob
-  ) {
-    setError("");
-
-    setNote(null);
-
-    resetNotionState();
-
-    const newTranscript =
-      await transcribeBlob(
-        recordedBlob
-      );
-
-    setTranscript(
-      newTranscript
-    );
-
-    const structuredNote =
-      await structureText(
-        newTranscript
-      );
-
-    setNote(
-      structuredNote
-    );
-
-    setProcessingStep(
-      "ready"
-    );
-
-    const historyId =
-      createHistoryItem(
-        structuredNote,
-        newTranscript
-      );
-
-    currentHistoryIdRef.current =
-      historyId;
-  }
-
   async function transcribeBlob(
     blob: Blob
-  ): Promise<string> {
+  ) {
     setProcessingStep(
       "transcribing"
     );
@@ -850,9 +792,7 @@ export default function Home() {
       new FormData();
 
     const extension =
-      blob.type.includes(
-        "ogg"
-      )
+      blob.type.includes("ogg")
         ? "ogg"
         : "webm";
 
@@ -867,8 +807,7 @@ export default function Home() {
         "/api/transcribe",
         {
           method: "POST",
-          body:
-            formData,
+          body: formData,
         }
       );
 
@@ -882,17 +821,7 @@ export default function Home() {
       );
     }
 
-    if (
-      !data.transcript ||
-      typeof data.transcript !==
-        "string"
-    ) {
-      throw new Error(
-        "The transcription service returned no text."
-      );
-    }
-
-    return data.transcript;
+    return data.transcript as string;
   }
 
   async function structureText(
@@ -914,12 +843,9 @@ export default function Home() {
           },
 
           body:
-            JSON.stringify(
-              {
-                transcript:
-                  text,
-              }
-            ),
+            JSON.stringify({
+              transcript: text,
+            }),
         }
       );
 
@@ -929,11 +855,57 @@ export default function Home() {
     if (!response.ok) {
       throw new Error(
         data.error ||
-          "Could not structure the note."
+          "Could not structure note."
       );
     }
 
-    return data as StructuredNote;
+    return {
+      ...data,
+
+      priority:
+        data.priority ??
+        "Low",
+    };
+  }
+
+  async function processRecording(
+    blob: Blob
+  ) {
+    try {
+      const newTranscript =
+        await transcribeBlob(blob);
+
+      setTranscript(
+        newTranscript
+      );
+
+      const structured =
+        await structureText(
+          newTranscript
+        );
+
+      setNote(structured);
+
+      setProcessingStep(
+        "ready"
+      );
+
+      currentHistoryIdRef.current =
+        createHistoryItem(
+          structured,
+          newTranscript
+        );
+    } catch (err) {
+      setProcessingStep(
+        "idle"
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Processing failed."
+      );
+    }
   }
 
   async function handleSubmit(
@@ -941,170 +913,96 @@ export default function Home() {
   ) {
     event.preventDefault();
 
-    await structureTranscriptManually();
-  }
-
-  async function structureTranscriptManually() {
-    if (
-      !transcript.trim()
-    ) {
-      setError(
-        "Please record audio or enter a transcript first."
-      );
-
+    if (!transcript.trim()) {
       return;
     }
 
-    setError("");
-
-    setNote(null);
-
-    resetNotionState();
-
     try {
-      const structuredNote =
+      setError("");
+
+      const structured =
         await structureText(
           transcript.trim()
         );
 
-      setNote(
-        structuredNote
-      );
+      setNote(structured);
 
       setProcessingStep(
         "ready"
       );
 
-      const historyId =
+      currentHistoryIdRef.current =
         createHistoryItem(
-          structuredNote,
+          structured,
           transcript.trim()
         );
-
-      currentHistoryIdRef.current =
-        historyId;
     } catch (err) {
-      console.error(
-        "STRUCTURE NOTE ERROR:",
-        err
-      );
-
       setProcessingStep(
         "idle"
       );
 
-      if (
+      setError(
         err instanceof Error
-      ) {
-        setError(
-          err.message
-        );
-      } else {
-        setError(
-          "Could not structure the note."
-        );
-      }
+          ? err.message
+          : "Could not structure note."
+      );
     }
   }
 
   async function retranscribeRecording() {
     if (!audioBlob) {
-      setError(
-        "Please record some audio first."
-      );
-
       return;
     }
 
-    try {
-      await processRecording(
-        audioBlob
-      );
-    } catch (err) {
-      console.error(
-        "REPROCESS RECORDING ERROR:",
-        err
-      );
-
-      setProcessingStep(
-        "idle"
-      );
-
-      if (
-        err instanceof Error
-      ) {
-        setError(
-          err.message
-        );
-      } else {
-        setError(
-          "Could not process the recording."
-        );
-      }
-    }
+    await processRecording(
+      audioBlob
+    );
   }
 
   async function saveToNotion() {
-  if (!note) {
-    setError(
-      "There is no structured note to save."
-    );
-
-    return;
-  }
-
-  if (!savedDataSourceId) {
-    setError(
-      "Choose and save a Notion destination first."
-    );
-
-    return;
-  }
-
-  setProcessingStep(
-    "saving"
-  );
-
-  setError("");
-
-  setNotionSaved(false);
-
-  setNotionPageUrl(
-    null
-  );
-
-  try {
-    const {
-      data: { session },
-    } =
-      await supabaseBrowser.auth.getSession();
-
-    if (!session) {
-      window.location.href =
-        "/login";
-
+    if (
+      !note ||
+      !savedDataSourceId
+    ) {
       return;
     }
 
-    const response =
-      await fetch(
-        "/api/notion/save",
-        {
-          method: "POST",
+    setProcessingStep(
+      "saving"
+    );
 
-          headers: {
-            "Content-Type":
-              "application/json",
+    setError("");
 
-            Authorization:
-              `Bearer ${session.access_token}`,
-          },
+    try {
+      const {
+        data: { session },
+      } =
+        await supabaseBrowser.auth.getSession();
 
-          body:
-            JSON.stringify(
-              {
-                title:
-                  note.title,
+      if (!session) {
+        window.location.href =
+          "/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          "/api/notion/save",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+
+            body:
+              JSON.stringify({
+                title: note.title,
 
                 summary:
                   note.summary,
@@ -1115,104 +1013,83 @@ export default function Home() {
                 category:
                   note.category,
 
+                priority:
+                  note.priority,
+
                 dueDate:
                   note.dueDate,
 
                 transcript,
-              }
-            ),
-        }
-      );
+              }),
+          }
+        );
 
-    const data =
-      (await response.json()) as NotionSaveResponse;
+      const data =
+        (await response.json()) as NotionSaveResponse;
 
-    if (!response.ok) {
-      throw new Error(
-        data.details ||
-          data.error ||
-          "Could not save the note to Notion."
-      );
-    }
+      if (!response.ok) {
+        throw new Error(
+          data.details ||
+            data.error ||
+            "Notion save failed."
+        );
+      }
 
-    setNotionSaved(true);
+      setNotionSaved(true);
 
-    if (data.url) {
       setNotionPageUrl(
-        data.url
+        data.url ?? null
       );
-    }
 
-    if (
-      currentHistoryIdRef.current
-    ) {
-      updateHistoryItem(
-        currentHistoryIdRef.current,
-        {
-          savedToNotion:
-            true,
+      if (
+        currentHistoryIdRef.current
+      ) {
+        updateHistoryItem(
+          currentHistoryIdRef.current,
+          {
+            savedToNotion:
+              true,
 
-          notionUrl:
-            data.url ??
-            null,
+            notionUrl:
+              data.url ??
+              null,
 
-          note,
+            note,
 
-          transcript,
-        }
+            transcript,
+          }
+        );
+      }
+
+      setProcessingStep(
+        "ready"
       );
-    }
+    } catch (err) {
+      setProcessingStep(
+        "ready"
+      );
 
-    setProcessingStep(
-      "ready"
-    );
-
-    console.log(
-      "NOTION SAVE SUCCESS:",
-      data
-    );
-  } catch (err) {
-    console.error(
-      "SAVE TO NOTION ERROR:",
-      err
-    );
-
-    setProcessingStep(
-      "ready"
-    );
-
-    if (
-      err instanceof Error
-    ) {
       setError(
-        err.message
-      );
-    } else {
-      setError(
-        "Could not save the note to Notion."
+        err instanceof Error
+          ? err.message
+          : "Could not save to Notion."
       );
     }
   }
-}
 
   function updateNote(
     changes: Partial<StructuredNote>
   ) {
     setNote(
-      (
-        currentNote
-      ) => {
-        if (
-          !currentNote
-        ) {
-          return currentNote;
+      (current) => {
+        if (!current) {
+          return null;
         }
 
-        const updatedNote =
-          {
-            ...currentNote,
-            ...changes,
-          };
+        const updated = {
+          ...current,
+          ...changes,
+        };
 
         if (
           currentHistoryIdRef.current
@@ -1220,13 +1097,12 @@ export default function Home() {
           updateHistoryItem(
             currentHistoryIdRef.current,
             {
-              note:
-                updatedNote,
+              note: updated,
             }
           );
         }
 
-        return updatedNote;
+        return updated;
       }
     );
 
@@ -1241,17 +1117,13 @@ export default function Home() {
       return;
     }
 
-    const updatedItems =
-      [
-        ...note.actionItems,
-      ];
+    const items =
+      [...note.actionItems];
 
-    updatedItems[index] =
-      value;
+    items[index] = value;
 
     updateNote({
-      actionItems:
-        updatedItems,
+      actionItems: items,
     });
   }
 
@@ -1278,91 +1150,10 @@ export default function Home() {
     updateNote({
       actionItems:
         note.actionItems.filter(
-          (
-            _,
-            itemIndex
-          ) =>
-            itemIndex !==
-            index
+          (_, itemIndex) =>
+            itemIndex !== index
         ),
     });
-  }
-
-  function loadHistoryItem(
-    item: CaptureHistoryItem
-  ) {
-    setTranscript(
-      item.transcript
-    );
-
-    setNote(
-      item.note
-    );
-
-    setNotionSaved(
-      item.savedToNotion
-    );
-
-    setNotionPageUrl(
-      item.notionUrl
-    );
-
-    currentHistoryIdRef.current =
-      item.id;
-
-    setError("");
-
-    setProcessingStep(
-      "ready"
-    );
-
-    if (audioUrl) {
-      URL.revokeObjectURL(
-        audioUrl
-      );
-    }
-
-    setAudioUrl(null);
-
-    setAudioBlob(null);
-
-    setRecordingSeconds(0);
-
-    window.scrollTo({
-      top: 0,
-      behavior:
-        "smooth",
-    });
-  }
-
-  function deleteHistoryItem(
-    id: string
-  ) {
-    setHistory(
-      (
-        currentHistory
-      ) =>
-        currentHistory.filter(
-          (item) =>
-            item.id !==
-            id
-        )
-    );
-
-    if (
-      currentHistoryIdRef.current ===
-      id
-    ) {
-      currentHistoryIdRef.current =
-        null;
-    }
-  }
-
-  function clearHistory() {
-    setHistory([]);
-
-    currentHistoryIdRef.current =
-      null;
   }
 
   function resetCapture() {
@@ -1373,15 +1164,10 @@ export default function Home() {
     }
 
     setAudioUrl(null);
-
     setAudioBlob(null);
-
     setTranscript("");
-
     setNote(null);
-
     setError("");
-
     setRecordingSeconds(0);
 
     setProcessingStep(
@@ -1394,6 +1180,42 @@ export default function Home() {
     resetNotionState();
   }
 
+  function loadHistoryItem(
+    item: CaptureHistoryItem
+  ) {
+    setTranscript(
+      item.transcript
+    );
+
+    setNote({
+      ...item.note,
+
+      priority:
+        item.note.priority ??
+        "Low",
+    });
+
+    setNotionSaved(
+      item.savedToNotion
+    );
+
+    setNotionPageUrl(
+      item.notionUrl
+    );
+
+    currentHistoryIdRef.current =
+      item.id;
+
+    setProcessingStep(
+      "ready"
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
   function formatRecordingTime(
     seconds: number
   ) {
@@ -1402,895 +1224,756 @@ export default function Home() {
         seconds / 60
       );
 
-    const remainingSeconds =
+    const remaining =
       seconds % 60;
 
-    return `${minutes
-      .toString()
-      .padStart(
-        2,
-        "0"
-      )}:${remainingSeconds
-      .toString()
-      .padStart(
-        2,
-        "0"
-      )}`;
+    return `${String(
+      minutes
+    ).padStart(
+      2,
+      "0"
+    )}:${String(
+      remaining
+    ).padStart(
+      2,
+      "0"
+    )}`;
   }
 
-  function formatHistoryDate(
-    dateString: string
-  ) {
-    const date =
-      new Date(
-        dateString
-      );
+  function systemLabel() {
+    if (isRecording) {
+      return "Listening";
+    }
 
-    return date.toLocaleString();
-  }
-
-  function processingMessage() {
     if (
       processingStep ===
       "transcribing"
     ) {
-      return "Transcribing your recording...";
+      return "Transcribing";
     }
 
     if (
       processingStep ===
       "structuring"
     ) {
-      return "Turning your thought into a structured note...";
+      return "AI Structuring";
     }
 
     if (
       processingStep ===
       "saving"
     ) {
-      return "Saving your note to Notion...";
+      return "Syncing";
     }
 
-    return null;
+    if (
+      processingStep ===
+      "ready"
+    ) {
+      return "Note Ready";
+    }
+
+    return "System Ready";
   }
 
-  const destinationChanged =
-    selectedDataSourceId !==
-    savedDataSourceId;
-
   return (
-  <AuthGate>
-    <main className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto max-w-4xl px-6 py-16">
-        <header className="mb-12">
-          <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-zinc-500">
-            AI Productivity
-          </p>
+    <AuthGate>
+      <main className="vtn-shell">
+        <div className="vtn-orb vtn-orb-purple" />
+        <div className="vtn-orb vtn-orb-cyan" />
 
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            Voice to Notion
-          </h1>
-
-          <p className="mt-4 max-w-2xl text-lg leading-8 text-zinc-400">
-            Speak your thought.
-            We&apos;ll transcribe
-            it, organize it and
-            prepare it for Notion.
-          </p>
-        </header>
-
-        {/* NOTION DESTINATION */}
-
-        <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">
-                Notion Destination
-              </h2>
-
-              <p className="mt-1 text-sm text-zinc-500">
-                Choose where your
-                captured notes will
-                be saved.
-              </p>
-            </div>
-
-            {savedDataSourceId && (
-              <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
-                Connected
-              </span>
-            )}
-          </div>
-
-          {loadingDatabases ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
-              Loading your Notion
-              workspace...
-            </div>
-          ) : notionDatabaseError &&
-            notionDataSources.length ===
-              0 ? (
-            <div>
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-                {
-                  notionDatabaseError
-                }
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={
-                    loadNotionDatabases
-                  }
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800"
-                >
-                  Try Again
-                </button>
-
-                <button
-                  type="button"
-                  onClick={connectNotion}
-                  className="rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
-                >
-                  Connect Notion
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              {notionWorkspaceName && (
-                <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">
-                    Workspace
-                  </p>
-
-                  <p className="mt-1 font-medium text-white">
-                    {
-                      notionWorkspaceName
-                    }
-                  </p>
+        <div className="vtn-container pb-20 pt-5">
+          <header className="sticky top-4 z-50 mb-8">
+            <div className="vtn-glass flex items-center justify-between gap-4 rounded-[22px] px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 font-black text-white">
+                  V
                 </div>
-              )}
 
-              {notionDataSources.length >
-              0 ? (
-                <>
-                  <label
-                    htmlFor="notion-destination"
-                    className="mb-2 block text-sm font-medium text-zinc-400"
-                  >
-                    Destination database
+                <div>
+                  <p className="text-sm font-bold text-[var(--foreground)]">
+                    Voice to Notion
+                  </p>
+
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="vtn-status-dot" />
+
+                    <span className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)]">
+                      {systemLabel()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {savedDataSourceId && (
+                  <div className="vtn-badge hidden md:flex">
+                    <span className="vtn-status-dot" />
+                    Notion synced
+                  </div>
+                )}
+
+                <ThemeToggle />
+
+                <span className="hidden max-w-[180px] truncate text-xs text-[var(--muted)] lg:block">
+                  {accountEmail}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={signOut}
+                  disabled={signingOut}
+                  className="vtn-secondary px-3 py-2 text-xs"
+                >
+                  {signingOut
+                    ? "..."
+                    : "Log out"}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <section className="mb-8">
+            <div className="vtn-eyebrow mb-3">
+              <span className="vtn-eyebrow-dot" />
+              Neural capture workspace
+            </div>
+
+            <h1 className="vtn-gradient-text max-w-3xl text-3xl font-bold tracking-[-0.04em] sm:text-5xl">
+              Capture thoughts at the speed of speech.
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Speak once. AI structures your thought and sends it directly into Notion.
+            </p>
+          </section>
+
+          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <aside className="space-y-6">
+              <section
+                className={`vtn-card p-6 ${
+                  isRecording
+                    ? "vtn-recording"
+                    : ""
+                }`}
+              >
+                <div className="relative z-10">
+                  <div className="flex justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                        Voice Core
+                      </span>
+
+                      <h2 className="mt-2 text-xl font-semibold">
+                        Capture
+                      </h2>
+                    </div>
+
+                    <div className="vtn-badge font-mono">
+                      {formatRecordingTime(
+                        recordingSeconds
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <button
+                      type="button"
+                      onClick={
+                        isRecording
+                          ? stopRecording
+                          : startRecording
+                      }
+                      disabled={
+                        isBusy &&
+                        !isRecording
+                      }
+                      className="rounded-full"
+                    >
+                      <div className="vtn-record-orb">
+                        <div className="vtn-record-core flex items-center justify-center text-white">
+                          {isRecording
+                            ? "■"
+                            : "🎙"}
+                        </div>
+                      </div>
+                    </button>
+
+                    <p className="mt-5 font-semibold">
+                      {isRecording
+                        ? "Listening"
+                        : isBusy
+                          ? systemLabel()
+                          : "Tap to speak"}
+                    </p>
+
+                    <div
+                      className={`vtn-waveform mt-5 ${
+                        isRecording
+                          ? "is-active"
+                          : ""
+                      }`}
+                    >
+                      {Array.from({
+                        length: 13,
+                      }).map(
+                        (_, index) => (
+                          <span
+                            key={
+                              index
+                            }
+                          />
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {audioUrl && (
+                    <>
+                      <audio
+                        controls
+                        src={audioUrl}
+                        className="w-full"
+                      />
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={
+                            retranscribeRecording
+                          }
+                          className="vtn-secondary py-2 text-xs"
+                        >
+                          Process Again
+                        </button>
+
+                        <button
+                          onClick={
+                            resetCapture
+                          }
+                          className="vtn-secondary py-2 text-xs"
+                        >
+                          New Capture
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <section className="vtn-card p-5">
+                <div className="relative z-10">
+                  <div className="mb-4 flex justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                        Destination
+                      </span>
+
+                      <h2 className="mt-2 text-lg font-semibold">
+                        Notion Sync
+                      </h2>
+                    </div>
+
+                    {savedDataSourceId && (
+                      <span className="vtn-success rounded-full px-2.5 py-1 text-[10px]">
+                        Live
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingDatabases ? (
+                    <p className="text-xs text-[var(--muted)]">
+                      Loading workspace...
+                    </p>
+                  ) : (
+                    <>
+                      {notionWorkspaceName && (
+                        <div className="mb-3 rounded-xl border border-[var(--border)] p-3">
+                          <p className="text-[9px] uppercase text-[var(--muted)]">
+                            Workspace
+                          </p>
+
+                          <p className="mt-1 text-xs font-semibold">
+                            {notionWorkspaceName}
+                          </p>
+                        </div>
+                      )}
+
+                      <select
+                        value={
+                          selectedDataSourceId
+                        }
+                        onChange={(
+                          event
+                        ) => {
+                          setSelectedDataSourceId(
+                            event.target.value
+                          );
+
+                          setNotionDatabaseMessage(
+                            ""
+                          );
+                        }}
+                        className="vtn-input p-3 text-xs"
+                      >
+                        <option value="">
+                          Select database...
+                        </option>
+
+                        {notionDataSources.map(
+                          (source) => (
+                            <option
+                              key={
+                                source.id
+                              }
+                              value={
+                                source.id
+                              }
+                            >
+                              {source.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+
+                      <button
+                        onClick={
+                          saveNotionDatabaseSelection
+                        }
+                        disabled={
+                          !selectedDataSourceId ||
+                          savingDatabase ||
+                          !destinationChanged
+                        }
+                        className="vtn-primary mt-3 w-full py-2.5 text-xs"
+                      >
+                        {savingDatabase
+                          ? "Saving..."
+                          : destinationChanged
+                            ? "Sync Destination"
+                            : "Destination Synced"}
+                      </button>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={
+                            loadNotionDatabases
+                          }
+                          className="vtn-secondary py-2 text-xs"
+                        >
+                          Refresh
+                        </button>
+
+                        <button
+                          onClick={
+                            connectNotion
+                          }
+                          className="vtn-secondary py-2 text-xs"
+                        >
+                          Reconnect
+                        </button>
+                      </div>
+
+                      {notionDatabaseError && (
+                        <div className="vtn-error mt-3 rounded-xl p-3 text-xs">
+                          {notionDatabaseError}
+                        </div>
+                      )}
+
+                      {notionDatabaseMessage && (
+                        <div className="vtn-success mt-3 rounded-xl p-3 text-xs">
+                          {notionDatabaseMessage}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </section>
+            </aside>
+
+            <section className="vtn-card p-6">
+              <div className="relative z-10">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Live Workspace
+                </span>
+
+                <h2 className="mt-2 text-2xl font-semibold">
+                  Thought processing
+                </h2>
+
+                <form
+                  onSubmit={handleSubmit}
+                  className="mt-6"
+                >
+                  <label className="mb-2 block text-[10px] uppercase text-[var(--muted)]">
+                    Live Transcript
                   </label>
 
-                  <select
-                    id="notion-destination"
-                    value={
-                      selectedDataSourceId
-                    }
+                  <textarea
+                    value={transcript}
                     onChange={(
                       event
                     ) => {
-                      setSelectedDataSourceId(
-                        event
-                          .target
-                          .value
+                      setTranscript(
+                        event.target.value
                       );
 
-                      setNotionDatabaseMessage(
-                        ""
-                      );
-
-                      setNotionDatabaseError(
-                        ""
-                      );
+                      resetNotionState();
                     }}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none transition focus:border-zinc-500"
-                  >
-                    <option value="">
-                      Choose a
-                      database...
-                    </option>
+                    rows={7}
+                    placeholder="Your voice will appear here..."
+                    className="vtn-input min-h-[170px] p-4 text-sm leading-7"
+                  />
 
-                    {notionDataSources.map(
-                      (
-                        source
-                      ) => (
-                        <option
-                          key={
-                            source.id
-                          }
-                          value={
-                            source.id
-                          }
-                        >
-                          {
-                            source.name
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div className="mt-3 flex gap-2">
                     <button
-                      type="button"
-                      onClick={
-                        saveNotionDatabaseSelection
-                      }
+                      type="submit"
                       disabled={
-                        !selectedDataSourceId ||
-                        savingDatabase ||
-                        !destinationChanged
+                        isBusy ||
+                        !transcript.trim()
                       }
-                      className="rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="vtn-secondary px-4 py-2.5 text-xs"
                     >
-                      {savingDatabase
-                        ? "Saving..."
-                        : destinationChanged
-                          ? "Save Destination"
-                          : "Destination Saved"}
+                      ✦ Re-structure with AI
                     </button>
 
                     <button
                       type="button"
                       onClick={
-                        loadNotionDatabases
+                        resetCapture
                       }
-                      disabled={
-                        loadingDatabases
-                      }
-                      className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
+                      className="vtn-secondary px-4 py-2.5 text-xs"
                     >
-                      Refresh
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={connectNotion}
-                      className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800"
-                    >
-                      Reconnect Notion
+                      Clear
                     </button>
                   </div>
-                </>
-              ) : (
-                <div>
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-300">
-                    No Notion
-                    databases were
-                    found. Give Voice
-                    to Notion access
-                    to a database and
-                    reconnect.
+                </form>
+
+                {error && (
+                  <div className="vtn-error mt-4 rounded-xl p-3 text-xs">
+                    {error}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={connectNotion}
-                    className="mt-4 inline-block rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
-                  >
-                    Connect Notion
-                  </button>
-                </div>
-              )}
-
-              {notionDatabaseError && (
-                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-                  {
-                    notionDatabaseError
-                  }
-                </div>
-              )}
-
-              {notionDatabaseMessage && (
-                <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-400">
-                  {
-                    notionDatabaseMessage
-                  }
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* RECORDING */}
-
-        <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">
-                Voice Recording
-              </h2>
-
-              <p className="mt-1 text-sm text-zinc-500">
-                Record once.
-                Processing starts
-                automatically when
-                you stop.
-              </p>
-            </div>
-
-            {isRecording && (
-              <div className="flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400">
-                <span className="h-2 w-2 rounded-full bg-red-400" />
-
-                {formatRecordingTime(
-                  recordingSeconds
                 )}
-              </div>
-            )}
-          </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            {!isRecording ? (
-              <button
-                type="button"
-                onClick={
-                  startRecording
-                }
-                disabled={isBusy}
-                className="rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Start Recording
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={
-                  stopRecording
-                }
-                className="rounded-xl bg-red-500 px-5 py-3 font-semibold text-white transition hover:bg-red-400"
-              >
-                Stop Recording
-              </button>
-            )}
+                <div className="my-6 h-px bg-[var(--border)]" />
 
-            <span className="text-sm text-zinc-400">
-              {isRecording
-                ? "Recording..."
-                : isBusy
-                  ? "Processing..."
-                  : "Microphone ready"}
-            </span>
-          </div>
+                {!note ? (
+                  <div className="vtn-empty-ai">
+                    <div className="vtn-empty-ai-icon">
+                      ✦
+                    </div>
 
-          {processingMessage() && (
-            <div className="mt-6 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-300">
-              {
-                processingMessage()
-              }
-            </div>
-          )}
+                    <p className="mt-4 font-semibold">
+                      Waiting for a thought
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="vtn-eyebrow">
+                      <span className="vtn-eyebrow-dot" />
+                      AI structured
+                    </div>
 
-          {audioUrl && (
-            <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-              <p className="mb-3 text-sm font-medium text-zinc-400">
-                Recorded audio
-              </p>
+                    <div>
+                      <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
+                        Title
+                      </label>
 
-              <audio
-                controls
-                src={audioUrl}
-                className="w-full"
-              />
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={
-                    retranscribeRecording
-                  }
-                  disabled={isBusy}
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Process Again
-                </button>
-
-                <button
-                  type="button"
-                  onClick={
-                    resetCapture
-                  }
-                  disabled={isBusy}
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Record Again
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* TRANSCRIPT */}
-
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <form
-            onSubmit={
-              handleSubmit
-            }
-          >
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <label
-                htmlFor="transcript"
-                className="block text-sm font-medium text-zinc-300"
-              >
-                Transcript
-              </label>
-
-              {transcript && (
-                <span className="text-xs text-zinc-600">
-                  {
-                    transcript.length
-                  }{" "}
-                  characters
-                </span>
-              )}
-            </div>
-
-            <textarea
-              id="transcript"
-              value={transcript}
-              onChange={(
-                event
-              ) => {
-                const value =
-                  event.target
-                    .value;
-
-                setTranscript(
-                  value
-                );
-
-                resetNotionState();
-
-                if (
-                  currentHistoryIdRef.current
-                ) {
-                  updateHistoryItem(
-                    currentHistoryIdRef.current,
-                    {
-                      transcript:
-                        value,
-                    }
-                  );
-                }
-              }}
-              placeholder="Your transcript will appear here automatically..."
-              rows={7}
-              disabled={isBusy}
-              className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none transition placeholder:text-zinc-600 focus:border-zinc-500 disabled:opacity-60"
-            />
-
-            {error && (
-              <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-                {error}
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={
-                  isBusy ||
-                  isRecording ||
-                  !transcript.trim()
-                }
-                className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Re-structure
-                Transcript
-              </button>
-
-              {(transcript ||
-                note ||
-                audioUrl) && (
-                <button
-                  type="button"
-                  onClick={
-                    resetCapture
-                  }
-                  disabled={
-                    isBusy ||
-                    isRecording
-                  }
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </form>
-        </section>
-
-        {/* PREVIEW */}
-
-        {note && (
-          <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold">
-                  Preview
-                </h2>
-
-                <p className="mt-1 text-sm text-zinc-500">
-                  Review and edit
-                  anything before
-                  sending it to
-                  Notion.
-                </p>
-              </div>
-
-              {note.mock && (
-                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
-                  Mock AI
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="mb-2 block text-sm text-zinc-500">
-                  Title
-                </label>
-
-                <input
-                  type="text"
-                  value={
-                    note.title
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    updateNote({
-                      title:
-                        event
-                          .target
-                          .value,
-                    })
-                  }
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none focus:border-zinc-500"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-zinc-500">
-                  Summary
-                </label>
-
-                <textarea
-                  value={
-                    note.summary
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    updateNote({
-                      summary:
-                        event
-                          .target
-                          .value,
-                    })
-                  }
-                  rows={4}
-                  className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none focus:border-zinc-500"
-                />
-              </div>
-
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm text-zinc-500">
-                    Category
-                  </label>
-
-                  <input
-                    type="text"
-                    value={
-                      note.category
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      updateNote({
-                        category:
+                      <input
+                        value={note.title}
+                        onChange={(
                           event
-                            .target
-                            .value,
-                      })
-                    }
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none focus:border-zinc-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm text-zinc-500">
-                    Due Date
-                  </label>
-
-                  <input
-                    type="date"
-                    value={
-                      note.dueDate ??
-                      ""
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      updateNote({
-                        dueDate:
-                          event
-                            .target
-                            .value ||
-                          null,
-                      })
-                    }
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-white outline-none focus:border-zinc-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <p className="text-sm text-zinc-500">
-                    Action Items
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={
-                      addActionItem
-                    }
-                    className="text-sm font-medium text-zinc-300 hover:text-white"
-                  >
-                    + Add task
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {note.actionItems.map(
-                    (
-                      item,
-                      index
-                    ) => (
-                      <div
-                        key={
-                          index
+                        ) =>
+                          updateNote({
+                            title:
+                              event.target.value,
+                          })
                         }
-                        className="flex gap-3"
-                      >
+                        className="vtn-input p-3.5"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
+                        Summary
+                      </label>
+
+                      <textarea
+                        value={note.summary}
+                        onChange={(
+                          event
+                        ) =>
+                          updateNote({
+                            summary:
+                              event.target.value,
+                          })
+                        }
+                        rows={3}
+                        className="vtn-input p-3.5"
+                      />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
+                          Category
+                        </label>
+
                         <input
-                          type="text"
                           value={
-                            item
+                            note.category
                           }
                           onChange={(
                             event
                           ) =>
-                            updateActionItem(
-                              index,
-                              event
-                                .target
-                                .value
-                            )
+                            updateNote({
+                              category:
+                                event.target.value,
+                            })
                           }
-                          className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 p-4 text-zinc-300 outline-none focus:border-zinc-500"
+                          className="vtn-input p-3.5"
                         />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
+                          Priority
+                        </label>
+
+                        <select
+                          value={
+                            note.priority
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateNote({
+                              priority:
+                                event.target.value as Priority,
+                            })
+                          }
+                          className="vtn-input p-3.5"
+                        >
+                          <option value="Low">
+                            Low
+                          </option>
+
+                          <option value="Medium">
+                            Medium
+                          </option>
+
+                          <option value="High">
+                            High
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
+                          Due Date
+                        </label>
+
+                        <input
+                          type="date"
+                          value={
+                            note.dueDate ??
+                            ""
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateNote({
+                              dueDate:
+                                event.target.value ||
+                                null,
+                            })
+                          }
+                          className="vtn-input p-3.5"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[var(--border)] p-4">
+                      <div className="mb-3 flex justify-between">
+                        <div>
+                          <p className="text-xs font-semibold">
+                            Action Items
+                          </p>
+
+                          <p className="text-[10px] text-[var(--muted)]">
+                            AI extracted tasks
+                          </p>
+                        </div>
 
                         <button
                           type="button"
-                          onClick={() =>
-                            removeActionItem(
-                              index
-                            )
+                          onClick={
+                            addActionItem
                           }
-                          className="rounded-xl border border-zinc-700 px-4 text-zinc-500 transition hover:border-red-500/50 hover:text-red-400"
+                          className="vtn-secondary px-3 py-2 text-[10px]"
                         >
-                          Remove
+                          + Add
                         </button>
                       </div>
-                    )
-                  )}
 
-                  {note
-                    .actionItems
-                    .length ===
-                    0 && (
-                    <p className="text-sm text-zinc-500">
-                      No action
-                      items.
-                    </p>
-                  )}
-                </div>
-              </div>
+                      <div className="space-y-2">
+                        {note.actionItems.map(
+                          (
+                            item,
+                            index
+                          ) => (
+                            <div
+                              key={
+                                index
+                              }
+                              className="flex gap-2"
+                            >
+                              <input
+                                value={
+                                  item
+                                }
+                                onChange={(
+                                  event
+                                ) =>
+                                  updateActionItem(
+                                    index,
+                                    event.target.value
+                                  )
+                                }
+                                className="vtn-input flex-1 p-3 text-xs"
+                              />
 
-              <div className="border-t border-zinc-800 pt-6">
-                {!savedDataSourceId && (
-                  <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-300">
-                    Choose and save
-                    a Notion
-                    destination
-                    before saving
-                    this note.
-                  </div>
-                )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeActionItem(
+                                    index
+                                  )
+                                }
+                                className="vtn-secondary px-3"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={
-                      saveToNotion
-                    }
-                    disabled={
-                      processingStep ===
-                        "saving" ||
-                      notionSaved ||
-                      !note.title.trim() ||
-                      !savedDataSourceId
-                    }
-                    className="rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {processingStep ===
-                    "saving"
-                      ? "Saving..."
-                      : notionSaved
-                        ? "Saved to Notion"
-                        : "Save to Notion"}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={
+                        saveToNotion
+                      }
+                      disabled={
+                        processingStep ===
+                          "saving" ||
+                        notionSaved ||
+                        !savedDataSourceId
+                      }
+                      className="vtn-primary w-full py-3"
+                    >
+                      {processingStep ===
+                      "saving"
+                        ? "Syncing..."
+                        : notionSaved
+                          ? "Synced ✓"
+                          : "Send to Notion"}
+                    </button>
 
-                  {notionSaved &&
-                    notionPageUrl && (
+                    {notionPageUrl && (
                       <a
                         href={
                           notionPageUrl
                         }
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800"
+                        className="vtn-secondary block px-5 py-3 text-center text-xs"
                       >
-                        Open in
-                        Notion
+                        Open in Notion ↗
                       </a>
                     )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <section className="vtn-card mt-6 p-6">
+            <div className="relative z-10">
+              <div className="mb-5 flex justify-between">
+                <div>
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                    Memory Vault
+                  </span>
+
+                  <h2 className="mt-2 text-xl font-semibold">
+                    Recent Captures
+                  </h2>
                 </div>
 
-                {notionSaved && (
-                  <div className="mt-4 rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-400">
-                    Note saved
-                    successfully to
-                    Notion.
-                  </div>
+                {history.length > 0 && (
+                  <button
+                    onClick={() =>
+                      setHistory([])
+                    }
+                    className="vtn-secondary px-3 py-2 text-xs"
+                  >
+                    Clear history
+                  </button>
+                )}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {history.map(
+                  (item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        loadHistoryItem(
+                          item
+                        )
+                      }
+                      className="rounded-2xl border border-[var(--border)] p-4 text-left"
+                    >
+                      <p className="font-semibold">
+                        {item.note.title}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="vtn-badge">
+                          {item.note.category}
+                        </span>
+
+                        <span className="vtn-badge">
+                          {item.note.priority ??
+                            "Low"}
+                        </span>
+
+                        {item.savedToNotion && (
+                          <span className="vtn-success rounded-full px-2 py-1 text-[10px]">
+                            Synced
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-3 line-clamp-2 text-xs text-[var(--muted)]">
+                        {item.note.summary}
+                      </p>
+                    </button>
+                  )
+                )}
+
+                {history.length === 0 && (
+                  <p className="text-sm text-[var(--muted)]">
+                    No captures yet.
+                  </p>
                 )}
               </div>
             </div>
           </section>
-        )}
-
-        {/* HISTORY */}
-
-        <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">
-                Recent Captures
-              </h2>
-
-              <p className="mt-1 text-sm text-zinc-500">
-                Your last{" "}
-                {
-                  MAX_HISTORY_ITEMS
-                }{" "}
-                captures are
-                stored locally in
-                this browser.
-              </p>
-            </div>
-
-            {history.length >
-              0 && (
-              <button
-                type="button"
-                onClick={
-                  clearHistory
-                }
-                className="text-sm font-medium text-zinc-500 transition hover:text-red-400"
-              >
-                Clear history
-              </button>
-            )}
-          </div>
-
-          {history.length ===
-          0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500">
-              Your recent
-              captures will
-              appear here.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {history.map(
-                (item) => (
-                  <div
-                    key={
-                      item.id
-                    }
-                    className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          loadHistoryItem(
-                            item
-                          )
-                        }
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="truncate font-medium text-white">
-                          {
-                            item
-                              .note
-                              .title
-                          }
-                        </p>
-
-                        <p className="mt-1 text-xs text-zinc-600">
-                          {formatHistoryDate(
-                            item.createdAt
-                          )}
-                        </p>
-
-                        <p className="mt-2 line-clamp-2 text-sm text-zinc-400">
-                          {
-                            item
-                              .note
-                              .summary
-                          }
-                        </p>
-                      </button>
-
-                      <div className="flex items-center gap-3">
-                        {item.savedToNotion && (
-                          <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400">
-                            Saved
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            deleteHistoryItem(
-                              item.id
-                            )
-                          }
-                          className="text-sm text-zinc-600 transition hover:text-red-400"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-
-                    {item.notionUrl && (
-                      <a
-                        href={
-                          item.notionUrl
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-3 inline-block text-sm font-medium text-zinc-400 hover:text-white"
-                      >
-                        Open saved
-                        Notion page
-                      </a>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </section>
-            </div>
-    </main>
-  </AuthGate>
-);
+        </div>
+      </main>
+    </AuthGate>
+  );
 }

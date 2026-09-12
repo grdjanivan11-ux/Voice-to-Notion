@@ -16,41 +16,117 @@
   />
 </head>
 
-<body>
-  <main class="container">
+<body data-theme="dark">
 
-    <header class="header">
-      <p class="eyebrow">
-        AI PRODUCTIVITY
-      </p>
+  <div class="ambient ambient-purple"></div>
+  <div class="ambient ambient-cyan"></div>
 
-      <h1>
-        Voice to Notion
-      </h1>
+  <main class="app-shell">
 
-      <p class="subtitle">
-        Record a thought and turn it into a structured Notion note.
-      </p>
+    <!-- =========================================
+         TOP HUD
+    ========================================== -->
+
+    <header class="top-hud">
+
+      <div class="brand">
+
+        <div class="brand-mark">
+          V
+        </div>
+
+        <div class="brand-copy">
+
+          <strong>
+            Voice to Notion
+          </strong>
+
+          <div class="system-state">
+
+            <span
+              id="systemDot"
+              class="system-dot"
+            ></span>
+
+            <span id="systemLabel">
+              System ready
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="hud-actions">
+
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch theme"
+          title="Switch theme"
+        >
+          <span class="theme-icon">
+            ☾
+          </span>
+
+          <span class="theme-switch">
+            <span
+              id="themeThumb"
+              class="theme-thumb"
+            ></span>
+          </span>
+
+          <span class="theme-icon">
+            ☀
+          </span>
+        </button>
+
+      </div>
+
     </header>
 
-    <!-- ACCOUNT -->
+    <!-- =========================================
+         ACCOUNT
+    ========================================== -->
 
-    <section class="card">
-      <div class="section-header">
+    <section
+      id="accountCard"
+      class="panel auth-panel"
+    >
+
+      <div class="panel-kicker">
+        Account
+      </div>
+
+      <div
+        id="loggedOutHeader"
+        class="auth-heading"
+      >
+
         <div>
-          <h2>
-            Voice to Notion Account
-          </h2>
 
-          <p class="muted">
-            Log in with the same account you use on the web app.
+          <h1>
+            Welcome back.
+          </h1>
+
+          <p>
+            Sign in to your Voice to Notion workspace.
           </p>
+
         </div>
+
+        <div class="auth-orb">
+          ✦
+        </div>
+
       </div>
 
       <form id="authForm">
 
         <div class="field">
+
           <label for="authEmail">
             Email
           </label>
@@ -61,9 +137,11 @@
             autocomplete="email"
             placeholder="you@example.com"
           />
+
         </div>
 
         <div class="field">
+
           <label for="authPassword">
             Password
           </label>
@@ -74,14 +152,15 @@
             autocomplete="current-password"
             placeholder="••••••••"
           />
+
         </div>
 
         <button
           id="authButton"
-          class="primary-button auth-button"
+          class="button button-primary auth-button"
           type="submit"
         >
-          Log In
+          Enter Workspace
         </button>
 
       </form>
@@ -91,72 +170,249 @@
         class="signed-in-box"
         hidden
       >
-        <div class="signed-in-copy">
 
-          <span class="signed-in-label">
-            Signed in as
-          </span>
+        <div class="profile-block">
 
-          <strong
-            id="signedInEmail"
-            class="signed-in-email"
-          ></strong>
+          <div class="profile-avatar">
+
+            <span id="profileInitial">
+              V
+            </span>
+
+          </div>
+
+          <div class="profile-copy">
+
+            <span class="profile-label">
+              Signed in
+            </span>
+
+            <strong
+              id="signedInEmail"
+              class="profile-email"
+            ></strong>
+
+          </div>
 
         </div>
 
         <button
           id="logoutButton"
-          class="secondary-button compact-button"
+          class="icon-text-button"
           type="button"
         >
-          Log Out
+          Log out
         </button>
+
       </div>
 
       <div
         id="authMessage"
-        class="auth-message"
+        class="message"
         hidden
       ></div>
+
     </section>
 
-    <!-- APP -->
+    <!-- =========================================
+         MAIN APP
+    ========================================== -->
 
     <div
       id="appContent"
       hidden
     >
 
-      <!-- NOTION DESTINATION -->
+      <!-- =======================================
+           VOICE CORE
+      ======================================== -->
+
+      <section
+        id="voiceCard"
+        class="panel voice-panel"
+      >
+
+        <div class="voice-top">
+
+          <div>
+
+            <span class="panel-kicker">
+              Voice Core
+            </span>
+
+            <h2>
+              Capture instantly.
+            </h2>
+
+          </div>
+
+          <span
+            id="timer"
+            class="timer"
+          >
+            00:00
+          </span>
+
+        </div>
+
+        <div class="voice-center">
+
+          <div class="voice-rings">
+
+            <span class="ring ring-one"></span>
+            <span class="ring ring-two"></span>
+            <span class="ring ring-three"></span>
+
+            <button
+              id="recordButton"
+              class="mic-button"
+              type="button"
+              aria-label="Start recording"
+            >
+
+              <span class="mic-glow"></span>
+
+              <span
+                id="micIcon"
+                class="mic-icon"
+              >
+
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+
+                  <rect
+                    x="9"
+                    y="3"
+                    width="6"
+                    height="11"
+                    rx="3"
+                    fill="currentColor"
+                  />
+
+                  <path
+                    d="M6.5 11.5C6.5 14.54 8.96 17 12 17C15.04 17 17.5 14.54 17.5 11.5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+
+                  <path
+                    d="M12 17V21"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+
+                </svg>
+
+              </span>
+
+            </button>
+
+          </div>
+
+          <p
+            id="status"
+            class="voice-status"
+          >
+            Tap to speak
+          </p>
+
+          <p
+            id="voiceSubstatus"
+            class="voice-substatus"
+          >
+            Your thought becomes a structured Notion note automatically.
+          </p>
+
+          <div
+            id="waveform"
+            class="waveform"
+            aria-hidden="true"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+
+        </div>
+
+        <div
+          id="processingIndicator"
+          class="processing-indicator"
+          hidden
+        >
+
+          <span class="processing-spark">
+            ✦
+          </span>
+
+          <span id="processingText">
+            AI processing...
+          </span>
+
+        </div>
+
+        <audio
+          id="audioPlayer"
+          controls
+          hidden
+        ></audio>
+
+      </section>
+
+      <!-- =======================================
+           NOTION DESTINATION
+      ======================================== -->
 
       <section
         id="notionDestinationCard"
-        class="card"
+        class="panel destination-panel"
       >
+
         <div class="section-header">
 
           <div>
+
+            <span class="panel-kicker">
+              Destination
+            </span>
+
             <h2>
-              Notion Destination
+              Notion Sync
             </h2>
 
-            <p class="muted">
-              Choose where your notes will be saved.
-            </p>
           </div>
 
           <span
             id="notionConnectionBadge"
-            class="status-badge"
+            class="status-pill"
           >
-            Loading...
+            Loading
           </span>
 
         </div>
 
         <div
           id="notionDestinationLoading"
-          class="destination-message"
+          class="message neutral-message"
         >
           Loading your Notion workspace...
         </div>
@@ -166,16 +422,25 @@
           hidden
         >
 
-          <div class="destination-workspace">
+          <div class="workspace-row">
 
-            <span class="destination-label">
-              Workspace
-            </span>
+            <div class="notion-logo">
+              N
+            </div>
 
-            <strong
-              id="notionWorkspaceName"
-              class="destination-value"
-            ></strong>
+            <div class="workspace-copy">
+
+              <span>
+                Workspace
+              </span>
+
+              <strong
+                id="notionWorkspaceName"
+              ></strong>
+
+            </div>
+
+            <span class="sync-light"></span>
 
           </div>
 
@@ -188,9 +453,11 @@
             <select
               id="notionDatabaseSelect"
             >
+
               <option value="">
                 Choose a database...
               </option>
+
             </select>
 
           </div>
@@ -199,7 +466,7 @@
 
             <button
               id="saveDestinationButton"
-              class="primary-button"
+              class="button button-primary"
               type="button"
             >
               Save Destination
@@ -207,10 +474,11 @@
 
             <button
               id="refreshDestinationButton"
-              class="secondary-button compact-button"
+              class="button button-secondary small-button"
               type="button"
+              title="Refresh databases"
             >
-              Refresh
+              ↻
             </button>
 
           </div>
@@ -219,129 +487,127 @@
 
         <div
           id="notionDestinationMessage"
-          class="destination-message"
+          class="message"
           hidden
         ></div>
 
       </section>
 
-      <!-- VOICE CAPTURE -->
-
-      <section class="card">
-
-        <div class="recording-header">
-
-          <div>
-            <h2>
-              Voice Capture
-            </h2>
-
-            <p class="muted">
-              Record your note below.
-            </p>
-          </div>
-
-          <span
-            id="timer"
-            class="timer"
-          >
-            00:00
-          </span>
-
-        </div>
-
-        <button
-          id="recordButton"
-          class="primary-button"
-          type="button"
-        >
-          Start Recording
-        </button>
-
-        <p
-          id="status"
-          class="status"
-        >
-          Microphone ready
-        </p>
-
-        <audio
-          id="audioPlayer"
-          controls
-          hidden
-        ></audio>
-
-      </section>
-
-      <!-- TRANSCRIPT -->
+      <!-- =======================================
+           LIVE TRANSCRIPT
+      ======================================== -->
 
       <section
         id="resultSection"
-        class="card"
+        class="panel workspace-panel"
         hidden
       >
 
         <div class="section-header">
 
-          <h2>
-            Transcript
-          </h2>
+          <div>
+
+            <span class="panel-kicker">
+              Live Workspace
+            </span>
+
+            <h2>
+              Transcript
+            </h2>
+
+          </div>
 
           <span
             id="transcriptStatus"
-            class="status-badge"
+            class="status-pill"
           >
             Ready
           </span>
 
         </div>
 
-        <textarea
-          id="transcript"
-          rows="5"
-          placeholder="Your transcript will appear here..."
-        ></textarea>
+        <div
+          id="transcriptShell"
+          class="transcript-shell"
+        >
+
+          <textarea
+            id="transcript"
+            rows="5"
+            placeholder="Your voice will appear here..."
+          ></textarea>
+
+          <div class="transcript-footer">
+
+            <span id="transcriptCount">
+              0 characters
+            </span>
+
+            <span>
+              Editable
+            </span>
+
+          </div>
+
+        </div>
 
         <button
           id="restructureButton"
-          class="secondary-button"
+          class="button button-secondary full-button"
           type="button"
         >
-          Re-structure Transcript
+
+          <span>
+            ✦
+          </span>
+
+          Re-structure with AI
+
         </button>
 
       </section>
 
-      <!-- STRUCTURED NOTE -->
+      <!-- =======================================
+           STRUCTURED NOTE
+      ======================================== -->
 
       <section
         id="structuredSection"
-        class="card"
+        class="panel ai-panel"
         hidden
       >
 
         <div class="section-header">
 
           <div>
+
+            <span class="panel-kicker">
+              AI Structured
+            </span>
+
             <h2>
-              Structured Note
+              Smart Note
             </h2>
 
-            <p class="muted">
-              Review and edit before saving.
+            <p class="section-description">
+              Review your generated note before syncing.
             </p>
+
           </div>
 
           <span
             id="structuredStatus"
-            class="status-badge"
+            class="status-pill ai-pill"
           >
             Ready
           </span>
 
         </div>
 
+        <!-- TITLE -->
+
         <div class="field">
+
           <label for="title">
             Title
           </label>
@@ -350,9 +616,13 @@
             id="title"
             type="text"
           />
+
         </div>
 
+        <!-- SUMMARY -->
+
         <div class="field">
+
           <label for="summary">
             Summary
           </label>
@@ -361,11 +631,17 @@
             id="summary"
             rows="4"
           ></textarea>
+
         </div>
 
-        <div class="field-grid">
+        <!-- =====================================
+             SMART METADATA
+        ====================================== -->
+
+        <div class="metadata-grid metadata-grid-three">
 
           <div class="field">
+
             <label for="category">
               Category
             </label>
@@ -374,9 +650,35 @@
               id="category"
               type="text"
             />
+
           </div>
 
           <div class="field">
+
+            <label for="priority">
+              Priority
+            </label>
+
+            <select id="priority">
+
+              <option value="Low">
+                Low
+              </option>
+
+              <option value="Medium">
+                Medium
+              </option>
+
+              <option value="High">
+                High
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="field">
+
             <label for="dueDate">
               Due Date
             </label>
@@ -385,21 +687,34 @@
               id="dueDate"
               type="date"
             />
+
           </div>
 
         </div>
 
-        <div class="field">
+        <!-- =====================================
+             ACTION ITEMS
+        ====================================== -->
+
+        <div class="task-module">
 
           <div class="action-header">
 
-            <label>
-              Action Items
-            </label>
+            <div>
+
+              <span class="task-title">
+                Action Items
+              </span>
+
+              <span class="task-subtitle">
+                AI extracted tasks
+              </span>
+
+            </div>
 
             <button
               id="addActionButton"
-              class="text-button"
+              class="mini-action-button"
               type="button"
             >
               + Add
@@ -414,22 +729,48 @@
 
         </div>
 
+        <!-- =====================================
+             NOTION SAVE
+        ====================================== -->
+
         <div class="save-section">
 
           <button
             id="saveButton"
-            class="save-button"
+            class="button button-primary save-button"
             type="button"
           >
-            Save to Notion
+
+            Send to Notion
+
+            <span>
+              →
+            </span>
+
           </button>
 
           <div
             id="successBox"
-            class="success"
+            class="success-box"
             hidden
           >
-            Note saved successfully to Notion.
+
+            <div class="success-icon">
+              ✓
+            </div>
+
+            <div>
+
+              <strong>
+                Synced successfully
+              </strong>
+
+              <span>
+                Your note is now in Notion.
+              </span>
+
+            </div>
+
           </div>
 
           <a
@@ -440,18 +781,52 @@
             rel="noreferrer"
             hidden
           >
-            Open in Notion
+
+            Open Notion page
+
+            <span>
+              ↗
+            </span>
+
           </a>
 
         </div>
 
       </section>
 
+      <!-- =======================================
+           ERROR
+      ======================================== -->
+
       <div
         id="errorBox"
-        class="error"
+        class="error-box"
         hidden
       ></div>
+
+      <!-- =======================================
+           FOOTER
+      ======================================== -->
+
+      <footer class="footer">
+
+        <span>
+          Voice
+        </span>
+
+        <span class="footer-dot"></span>
+
+        <span>
+          AI
+        </span>
+
+        <span class="footer-dot"></span>
+
+        <span>
+          Notion
+        </span>
+
+      </footer>
 
     </div>
 
@@ -459,5 +834,6 @@
 
   <script src="auth.js"></script>
   <script src="popup.js"></script>
+
 </body>
 </html>

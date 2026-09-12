@@ -7,29 +7,55 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const ALLOWED_CATEGORIES = [
+  "Work",
+  "Personal",
+  "Study",
+  "Health",
+  "Finance",
+  "Meeting",
+  "Idea",
+  "Task",
+  "Shopping",
+  "Travel",
+  "Research",
+  "Reminder",
+  "Other",
+] as const;
+
 const CapturedNoteSchema = z.object({
   title: z.string(),
   summary: z.string(),
   actionItems: z.array(z.string()),
-  category: z.string(),
-
-  // Important:
-  // Due dates must now be YYYY-MM-DD or null.
+  category: z.enum(ALLOWED_CATEGORIES),
+  priority: z.enum([
+    "Low",
+    "Medium",
+    "High",
+  ]),
   dueDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
 });
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
     const body = await request.json();
-    const transcript = body.transcript;
 
-    if (!transcript || typeof transcript !== "string") {
+    const transcript =
+      body.transcript;
+
+    if (
+      !transcript ||
+      typeof transcript !== "string"
+    ) {
       return NextResponse.json(
         {
-          error: "Transcript is required.",
+          error:
+            "Transcript is required.",
         },
         {
           status: 400,
@@ -37,19 +63,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const useMockAI = process.env.USE_MOCK_AI === "true";
+    const useMockAI =
+      process.env.USE_MOCK_AI ===
+      "true";
 
     if (useMockAI) {
       return NextResponse.json({
-        title: "Finish Voice-to-Notion landing page",
+        title:
+          "Finish Voice to Notion project",
+
         summary:
-          "Finish the Voice-to-Notion landing page and send it to Mark.",
+          "Finish the Voice to Notion project and prepare it for launch.",
+
         actionItems: [
-          "Finish the Voice-to-Notion landing page",
-          "Send it to Mark",
+          "Finish the Voice to Notion project",
+          "Prepare the product for launch",
         ],
+
         category: "Work",
-        dueDate: "2026-09-01",
+        priority: "High",
+        dueDate: "2026-09-11",
         mock: true,
       });
     }
@@ -57,7 +90,8 @@ export async function POST(request: Request) {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         {
-          error: "OPENAI_API_KEY is missing.",
+          error:
+            "OPENAI_API_KEY is missing.",
         },
         {
           status: 500,
@@ -65,101 +99,239 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-     * Give GPT the real current date so phrases such as:
-     *
-     * "today"
-     * "tomorrow"
-     * "next Friday"
-     *
-     * can be converted into an actual ISO date.
-     */
-    const currentDate = new Date().toISOString().split("T")[0];
+    const currentDate =
+      new Date()
+        .toISOString()
+        .split("T")[0];
 
-    const response = await openai.responses.parse({
-      model: "gpt-5.4-mini",
+    const response =
+      await openai.responses.parse({
+        model: "gpt-5.4-mini",
 
-      input: [
-        {
-          role: "system",
-          content: `
-You convert raw voice-note transcripts into structured productivity notes.
+        input: [
+          {
+            role: "system",
+
+            content: `
+You convert raw voice notes into structured productivity notes.
 
 The current date is ${currentDate}.
 
-Extract:
+The speaker may talk about ANY normal topic including:
+work, personal life, school, health, money, meetings, ideas,
+shopping, travel, research, reminders, tasks, plans,
+reference information, observations or general thoughts.
 
-1. title
-   - Short and clear.
-   - Describe the main subject or task.
+Do not assume every note is a task.
 
-2. summary
-   - Concisely summarize what the speaker meant.
+Return exactly these fields:
 
-3. actionItems
-   - Return actionable tasks explicitly stated or clearly requested.
-   - Do not invent unrelated tasks.
+title
+summary
+actionItems
+category
+priority
+dueDate
 
-4. category
-   - Return one short useful category.
-   - Examples:
-     Work
-     Personal
-     Health
-     Finance
-     Shopping
-     Ideas
-     Study
-     Other
+TITLE
 
-5. dueDate
-   - CRITICAL: Return ONLY a calendar date in YYYY-MM-DD format.
-   - Never return words such as:
-     "Today"
-     "Tomorrow"
-     "Friday"
-     "Next week"
+Create a short natural title that represents the main idea.
 
-   Convert relative dates into an actual YYYY-MM-DD date using the current
-   date supplied above.
+Examples:
 
-   Examples:
+"Remember to buy milk tomorrow."
+→ "Buy milk tomorrow"
 
-   If current date is 2026-09-01:
+"I've been thinking about creating an AI fitness app."
+→ "AI fitness app idea"
 
-   "today"
-   → 2026-09-01
+Avoid robotic titles such as:
+"The speaker wants to..."
 
-   "tomorrow"
-   → 2026-09-02
+SUMMARY
 
-   If the speaker does not provide or clearly imply a due date:
-   → null
+Summarize what the user actually said.
 
-Do not invent dates, people, facts, or tasks that the speaker did not state.
-          `,
+Preserve important context.
+
+Do not invent facts.
+
+ACTION ITEMS
+
+Extract only genuine actionable tasks.
+
+Example:
+
+"Buy milk and call Mark."
+→
+[
+  "Buy milk",
+  "Call Mark"
+]
+
+If the speaker is sharing information, knowledge, an idea,
+an observation or a thought and there are no genuine tasks:
+
+→ []
+
+Never invent tasks.
+
+CATEGORY
+
+Return EXACTLY ONE of:
+
+Work
+Personal
+Study
+Health
+Finance
+Meeting
+Idea
+Task
+Shopping
+Travel
+Research
+Reminder
+Other
+
+Normalize related meanings.
+
+Homework, exams and schoolwork
+→ Study
+
+Business, clients and job responsibilities
+→ Work
+
+Startup ideas, product ideas and creative concepts
+→ Idea
+
+Groceries and things to purchase
+→ Shopping
+
+Trips, hotels, flights and destinations
+→ Travel
+
+Research notes and factual investigation
+→ Research
+
+Appointments and "remember to..." notes
+→ Reminder
+
+If none clearly applies
+→ Other
+
+Never create a category outside this list.
+
+PRIORITY
+
+Return exactly:
+
+Low
+Medium
+High
+
+Use urgency AND importance.
+
+High:
+- urgent deadline
+- must happen today or extremely soon
+- serious consequence if missed
+- explicitly critical or urgent
+
+Medium:
+- meaningful actionable task
+- upcoming deadline
+- should reasonably be completed soon
+
+Low:
+- idea
+- reference information
+- optional task
+- general thought
+- no urgency
+- no meaningful deadline
+
+Examples:
+
+"Submit the application tonight."
+→ High
+
+"Finish homework by Friday."
+→ Medium
+
+"I have an idea for an app."
+→ Low
+
+"Remember this quote."
+→ Low
+
+Do not mark everything High.
+
+DUE DATE
+
+Return:
+
+YYYY-MM-DD
+
+or:
+
+null
+
+Resolve relative dates using ${currentDate}.
+
+Examples:
+
+today
+→ ${currentDate}
+
+tomorrow
+→ next calendar day
+
+in two days
+→ current date + 2 days
+
+next Friday
+→ next matching Friday
+
+If there is no clear or reasonably implied deadline:
+→ null
+
+Never invent a deadline.
+
+IMPORTANT:
+
+- preserve the speaker's meaning
+- do not invent people
+- do not invent deadlines
+- do not invent tasks
+- support a wide variety of normal voice notes
+- not every capture needs action items
+- not every capture needs a due date
+            `,
+          },
+
+          {
+            role: "user",
+            content: transcript,
+          },
+        ],
+
+        text: {
+          format: zodTextFormat(
+            CapturedNoteSchema,
+            "captured_note"
+          ),
         },
+      });
 
-        {
-          role: "user",
-          content: transcript,
-        },
-      ],
-
-      text: {
-        format: zodTextFormat(
-          CapturedNoteSchema,
-          "captured_note"
-        ),
-      },
-    });
-
-    const note = response.output_parsed;
+    const note =
+      response.output_parsed;
 
     if (!note) {
       return NextResponse.json(
         {
-          error: "Could not structure note.",
+          error:
+            "Could not structure note.",
         },
         {
           status: 500,
@@ -172,7 +344,10 @@ Do not invent dates, people, facts, or tasks that the speaker did not state.
       mock: false,
     });
   } catch (error) {
-    console.error("STRUCTURE NOTE ERROR:", error);
+    console.error(
+      "STRUCTURE NOTE ERROR:",
+      error
+    );
 
     if (
       error instanceof OpenAI.APIError &&
@@ -195,7 +370,8 @@ Do not invent dates, people, facts, or tasks that the speaker did not state.
     ) {
       return NextResponse.json(
         {
-          error: "OpenAI API authentication failed.",
+          error:
+            "OpenAI API authentication failed.",
         },
         {
           status: 401,
@@ -205,7 +381,8 @@ Do not invent dates, people, facts, or tasks that the speaker did not state.
 
     return NextResponse.json(
       {
-        error: "Failed to structure note.",
+        error:
+          "Failed to structure note.",
       },
       {
         status: 500,

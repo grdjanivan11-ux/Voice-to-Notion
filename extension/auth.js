@@ -2,12 +2,8 @@ const SUPABASE_URL =
   "https://lxsveftgcjofmoloplwt.supabase.co";
 
 /*
-  SAFE CLIENT KEY.
-
-  Replace this with the same
-  sb_publishable_... value used by:
-
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  This is the PUBLIC browser key.
+  Never put the service-role key here.
 */
 const SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_Sc76JsyY7CUzY_EWjCfsFQ_KgslC2KB";
@@ -15,9 +11,18 @@ const SUPABASE_PUBLISHABLE_KEY =
 const AUTH_STORAGE_KEY =
   "voiceToNotionAuth";
 
-async function saveAuthSession(session) {
+let refreshPromise = null;
+
+/*
+  STORAGE
+*/
+
+async function saveAuthSession(
+  session
+) {
   await chrome.storage.local.set({
-    [AUTH_STORAGE_KEY]: session,
+    [AUTH_STORAGE_KEY]:
+      session,
   });
 }
 
@@ -28,8 +33,9 @@ async function getStoredAuthSession() {
     );
 
   return (
-    result[AUTH_STORAGE_KEY] ??
-    null
+    result[
+      AUTH_STORAGE_KEY
+    ] ?? null
   );
 }
 
@@ -39,29 +45,60 @@ async function clearAuthSession() {
   );
 }
 
+/*
+  AUTH ERRORS
+*/
+
+function createAuthError(
+  message,
+  code
+) {
+  const error =
+    new Error(message);
+
+  error.code =
+    code;
+
+  return error;
+}
+
+/*
+  LOGIN
+*/
+
 async function signInWithPassword(
   email,
   password
 ) {
-  const response = await fetch(
-    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
-    {
-      method: "POST",
+  /*
+    Remove any previous local session
+    before logging into another account.
+  */
 
-      headers: {
-        apikey:
-          SUPABASE_PUBLISHABLE_KEY,
+  await clearAuthSession();
 
-        "Content-Type":
-          "application/json",
-      },
+  const response =
+    await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+      {
+        method:
+          "POST",
 
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    }
-  );
+        headers: {
+          apikey:
+            SUPABASE_PUBLISHABLE_KEY,
+
+          "Content-Type":
+            "application/json",
+        },
+
+        body:
+          JSON.stringify({
+            email,
+            password,
+          }),
+      }
+    );
 
   const data =
     await response.json();
@@ -75,6 +112,15 @@ async function signInWithPassword(
     );
   }
 
+  if (
+    !data.access_token ||
+    !data.refresh_token
+  ) {
+    throw new Error(
+      "Supabase returned an incomplete login session."
+    );
+  }
+
   const session = {
     accessToken:
       data.access_token,
@@ -84,7 +130,8 @@ async function signInWithPassword(
 
     expiresAt:
       Date.now() +
-      data.expires_in * 1000,
+      data.expires_in *
+        1000,
 
     user: {
       id:
@@ -104,75 +151,130 @@ async function signInWithPassword(
   return session;
 }
 
+/*
+  REFRESH SESSION
+*/
+
 async function refreshAuthSession() {
+  /*
+    Prevent two API requests from
+    refreshing at the same time.
+  */
+
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise =
+    performRefresh();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise =
+      null;
+  }
+}
+
+async function performRefresh() {
   const currentSession =
     await getStoredAuthSession();
 
   if (
     !currentSession?.refreshToken
   ) {
-    return null;
-  }
-
-  const response = await fetch(
-    `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
-    {
-      method: "POST",
-
-      headers: {
-        apikey:
-          SUPABASE_PUBLISHABLE_KEY,
-
-        "Content-Type":
-          "application/json",
-      },
-
-      body: JSON.stringify({
-        refresh_token:
-          currentSession.refreshToken,
-      }),
-    }
-  );
-
-  const data =
-    await response.json();
-
-  if (!response.ok) {
     await clearAuthSession();
 
     return null;
   }
 
-  const refreshedSession = {
-    accessToken:
-      data.access_token,
+  try {
+    const response =
+      await fetch(
+        `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+        {
+          method:
+            "POST",
 
-    refreshToken:
-      data.refresh_token,
+          headers: {
+            apikey:
+              SUPABASE_PUBLISHABLE_KEY,
 
-    expiresAt:
-      Date.now() +
-      data.expires_in * 1000,
+            "Content-Type":
+              "application/json",
+          },
 
-    user: {
-      id:
-        data.user?.id ??
-        currentSession.user?.id ??
-        null,
+          body:
+            JSON.stringify({
+              refresh_token:
+                currentSession.refreshToken,
+            }),
+        }
+      );
 
-      email:
-        data.user?.email ??
-        currentSession.user?.email ??
-        null,
-    },
-  };
+    const data =
+      await response.json();
 
-  await saveAuthSession(
-    refreshedSession
-  );
+    if (
+      !response.ok ||
+      !data.access_token ||
+      !data.refresh_token
+    ) {
+      console.error(
+        "SESSION REFRESH FAILED:",
+        data
+      );
 
-  return refreshedSession;
+      await clearAuthSession();
+
+      return null;
+    }
+
+    const refreshedSession = {
+      accessToken:
+        data.access_token,
+
+      refreshToken:
+        data.refresh_token,
+
+      expiresAt:
+        Date.now() +
+        data.expires_in *
+          1000,
+
+      user: {
+        id:
+          data.user?.id ??
+          currentSession.user?.id ??
+          null,
+
+        email:
+          data.user?.email ??
+          currentSession.user?.email ??
+          null,
+      },
+    };
+
+    await saveAuthSession(
+      refreshedSession
+    );
+
+    return refreshedSession;
+  } catch (error) {
+    console.error(
+      "SESSION REFRESH ERROR:",
+      error
+    );
+
+    await clearAuthSession();
+
+    return null;
+  }
 }
+
+/*
+  GET CURRENT VALID SESSION
+*/
 
 async function getValidAuthSession() {
   let session =
@@ -183,19 +285,20 @@ async function getValidAuthSession() {
   }
 
   /*
-    Refresh slightly before the
-    access token actually expires.
+    Refresh one minute before
+    the token expires.
   */
 
   const refreshBuffer =
     60 * 1000;
 
-  if (
+  const shouldRefresh =
     !session.expiresAt ||
     Date.now() >=
       session.expiresAt -
-        refreshBuffer
-  ) {
+        refreshBuffer;
+
+  if (shouldRefresh) {
     session =
       await refreshAuthSession();
   }
@@ -203,21 +306,131 @@ async function getValidAuthSession() {
   return session;
 }
 
+/*
+  AUTHENTICATED BACKEND REQUEST
+
+  1. Get session
+  2. Send request
+  3. If server returns 401:
+       refresh token
+  4. Retry exactly once
+  5. If still 401:
+       clear session
+*/
+
+async function authenticatedFetch(
+  url,
+  options = {}
+) {
+  let session =
+    await getValidAuthSession();
+
+  if (!session?.accessToken) {
+    throw createAuthError(
+      "Please log in to Voice to Notion.",
+      "AUTH_REQUIRED"
+    );
+  }
+
+  const firstResponse =
+    await sendAuthenticatedRequest(
+      url,
+      options,
+      session.accessToken
+    );
+
+  if (
+    firstResponse.status !==
+    401
+  ) {
+    return firstResponse;
+  }
+
+  console.warn(
+    "Backend returned 401. Refreshing session and retrying once."
+  );
+
+  session =
+    await refreshAuthSession();
+
+  if (!session?.accessToken) {
+    await clearAuthSession();
+
+    throw createAuthError(
+      "Your session expired. Please log in again.",
+      "AUTH_EXPIRED"
+    );
+  }
+
+  const retryResponse =
+    await sendAuthenticatedRequest(
+      url,
+      options,
+      session.accessToken
+    );
+
+  if (
+    retryResponse.status ===
+    401
+  ) {
+    await clearAuthSession();
+
+    throw createAuthError(
+      "Your session expired. Please log in again.",
+      "AUTH_EXPIRED"
+    );
+  }
+
+  return retryResponse;
+}
+
+async function sendAuthenticatedRequest(
+  url,
+  options,
+  accessToken
+) {
+  const headers =
+    new Headers(
+      options.headers ||
+        {}
+    );
+
+  headers.set(
+    "Authorization",
+    `Bearer ${accessToken}`
+  );
+
+  return fetch(
+    url,
+    {
+      ...options,
+      headers,
+    }
+  );
+}
+
+/*
+  LOGOUT
+*/
+
 async function signOutExtension() {
   const session =
     await getStoredAuthSession();
 
   /*
-    Best-effort server logout.
-    Local session is cleared either way.
+    Best effort server logout.
+    We clear Chrome storage regardless.
   */
 
-  if (session?.accessToken) {
+  if (
+    session?.accessToken
+  ) {
     try {
       await fetch(
         `${SUPABASE_URL}/auth/v1/logout`,
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             apikey:
@@ -229,8 +442,8 @@ async function signOutExtension() {
         }
       );
     } catch (error) {
-      console.error(
-        "SUPABASE LOGOUT ERROR:",
+      console.warn(
+        "SUPABASE LOGOUT REQUEST FAILED:",
         error
       );
     }
@@ -240,7 +453,7 @@ async function signOutExtension() {
 }
 
 /*
-  Expose functions to popup.js.
+  EXPOSE TO POPUP.JS
 */
 
 window.voiceToNotionAuth = {
@@ -248,5 +461,6 @@ window.voiceToNotionAuth = {
   getValidAuthSession,
   getStoredAuthSession,
   refreshAuthSession,
+  authenticatedFetch,
   signOutExtension,
 };

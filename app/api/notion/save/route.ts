@@ -3,21 +3,109 @@ import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+type Priority =
+  | "Low"
+  | "Medium"
+  | "High";
+
 type SaveNoteRequest = {
   title: string;
   summary: string;
   actionItems: string[];
   category: string;
+  priority?: Priority;
   dueDate: string | null;
   transcript: string;
 };
+
+const NOTION_TEXT_LIMIT = 1900;
+
+function splitText(
+  text: string,
+  maxLength = NOTION_TEXT_LIMIT
+) {
+  const cleaned = text.trim();
+
+  if (!cleaned) {
+    return [];
+  }
+
+  const chunks: string[] = [];
+
+  let remaining = cleaned;
+
+  while (
+    remaining.length >
+    maxLength
+  ) {
+    let splitIndex =
+      remaining.lastIndexOf(
+        " ",
+        maxLength
+      );
+
+    if (splitIndex <= 0) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(
+      remaining
+        .slice(0, splitIndex)
+        .trim()
+    );
+
+    remaining =
+      remaining
+        .slice(splitIndex)
+        .trim();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+function getCategoryEmoji(
+  category: string
+) {
+  const normalized =
+    category
+      .trim()
+      .toLowerCase();
+
+  const emojiMap: Record<
+    string,
+    string
+  > = {
+    work: "💼",
+    personal: "✨",
+    study: "📚",
+    health: "💪",
+    finance: "💰",
+    meeting: "🤝",
+    idea: "💡",
+    task: "✅",
+    shopping: "🛒",
+    travel: "✈️",
+    research: "🔎",
+    reminder: "⏰",
+    other: "🎙️",
+  };
+
+  return (
+    emojiMap[normalized] ??
+    "🎙️"
+  );
+}
 
 export async function POST(
   request: Request
 ) {
   try {
     /*
-      AUTHENTICATE SUPABASE USER
+      AUTH
     */
 
     const authorization =
@@ -59,11 +147,6 @@ export async function POST(
       userError ||
       !user
     ) {
-      console.error(
-        "SUPABASE USER VERIFY ERROR:",
-        userError
-      );
-
       return NextResponse.json(
         {
           error:
@@ -76,7 +159,7 @@ export async function POST(
     }
 
     /*
-      READ NOTE DATA
+      REQUEST BODY
     */
 
     const body =
@@ -87,14 +170,14 @@ export async function POST(
       summary,
       actionItems,
       category,
+      priority,
       dueDate,
       transcript,
     } = body;
 
     if (
       !title ||
-      typeof title !==
-        "string"
+      typeof title !== "string"
     ) {
       return NextResponse.json(
         {
@@ -124,7 +207,7 @@ export async function POST(
     }
 
     /*
-      LOAD THIS USER'S NOTION CONNECTION
+      LOAD USER'S NOTION CONNECTION
     */
 
     const {
@@ -149,9 +232,7 @@ export async function POST(
         )
         .maybeSingle();
 
-    if (
-      connectionError
-    ) {
+    if (connectionError) {
       console.error(
         "NOTION CONNECTION LOOKUP ERROR:",
         connectionError
@@ -180,9 +261,10 @@ export async function POST(
       );
     }
 
-    if (
-      !connection.selected_data_source_id
-    ) {
+    const dataSourceId =
+      connection.selected_data_source_id;
+
+    if (!dataSourceId) {
       return NextResponse.json(
         {
           error:
@@ -194,26 +276,238 @@ export async function POST(
       );
     }
 
-    /*
-      CREATE NOTION CLIENT
-      USING USER'S OAUTH TOKEN
-    */
-
     const notion =
       new Client({
         auth:
           connection.access_token,
       });
 
+    /*
+      CLEAN INPUT
+    */
+
+    const cleanTitle =
+      title.trim();
+
+    const cleanSummary =
+      summary?.trim() ||
+      "No summary available.";
+
+    const cleanCategory =
+      category?.trim() ||
+      "Other";
+
+    const cleanPriority: Priority =
+      priority === "High" ||
+      priority === "Medium" ||
+      priority === "Low"
+        ? priority
+        : "Low";
+
+    const cleanTranscript =
+      transcript?.trim() ||
+      "No transcript available.";
+
     const cleanActionItems =
       actionItems
         .map((item) =>
-          typeof item ===
-          "string"
+          typeof item === "string"
             ? item.trim()
             : ""
         )
         .filter(Boolean);
+
+    const summaryChunks =
+      splitText(
+        cleanSummary
+      );
+
+    const transcriptChunks =
+      splitText(
+        cleanTranscript
+      );
+
+    /*
+      INSPECT NOTION SCHEMA
+    */
+
+    const dataSource =
+      await notion.dataSources.retrieve({
+        data_source_id:
+          dataSourceId,
+      });
+
+    const schema =
+      dataSource.properties;
+
+    type PageProperties =
+      Parameters<
+        typeof notion.pages.create
+      >[0]["properties"];
+
+    const pageProperties: PageProperties =
+      {};
+
+    /*
+      TITLE
+      Locate title by TYPE,
+      not by property name.
+    */
+
+    const titleProperty =
+      Object.entries(
+        schema
+      ).find(
+        ([, property]) =>
+          property.type ===
+          "title"
+      );
+
+    if (!titleProperty) {
+      return NextResponse.json(
+        {
+          error:
+            "The selected Notion database has no title property.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const [
+      titlePropertyName,
+    ] = titleProperty;
+
+    pageProperties[
+      titlePropertyName
+    ] = {
+      title: [
+        {
+          type: "text",
+          text: {
+            content:
+              cleanTitle,
+          },
+        },
+      ],
+    };
+
+    /*
+      OPTIONAL CATEGORY
+    */
+
+    if (
+      schema.Category?.type ===
+      "select"
+    ) {
+      pageProperties.Category = {
+        select: {
+          name:
+            cleanCategory,
+        },
+      };
+    }
+
+    /*
+      OPTIONAL PRIORITY
+    */
+
+    if (
+      schema.Priority?.type ===
+      "select"
+    ) {
+      pageProperties.Priority = {
+        select: {
+          name:
+            cleanPriority,
+        },
+      };
+    }
+
+    /*
+      OPTIONAL SOURCE
+    */
+
+    if (
+      schema.Source?.type ===
+      "select"
+    ) {
+      pageProperties.Source = {
+        select: {
+          name: "Voice",
+        },
+      };
+    }
+
+    /*
+      OPTIONAL ACTION COUNT
+    */
+
+    if (
+      schema["Action Count"]
+        ?.type === "number"
+    ) {
+      pageProperties[
+        "Action Count"
+      ] = {
+        number:
+          cleanActionItems.length,
+      };
+    }
+
+    /*
+      OPTIONAL DUE DATE
+    */
+
+    if (
+      dueDate &&
+      schema["Due Date"]?.type ===
+        "date"
+    ) {
+      pageProperties[
+        "Due Date"
+      ] = {
+        date: {
+          start: dueDate,
+        },
+      };
+    }
+
+    /*
+      OPTIONAL STATUS
+    */
+
+    if (
+      schema.Status?.type ===
+      "status"
+    ) {
+      const options =
+        schema.Status.status
+          .options;
+
+      const preferred =
+        options.find(
+          (option) =>
+            option.name ===
+            "Inbox"
+        ) ??
+        options.find(
+          (option) =>
+            option.name ===
+            "Not started"
+        ) ??
+        options[0];
+
+      if (preferred) {
+        pageProperties.Status = {
+          status: {
+            name:
+              preferred.name,
+          },
+        };
+      }
+    }
 
     /*
       CREATE PAGE
@@ -226,74 +520,69 @@ export async function POST(
             "data_source_id",
 
           data_source_id:
-            connection.selected_data_source_id,
+            dataSourceId,
         },
 
-        properties: {
-          Name: {
-            type: "title",
+        icon: {
+          type: "emoji",
 
-            title: [
-              {
-                type: "text",
-
-                text: {
-                  content:
-                    title.trim(),
-                },
-              },
-            ],
-          },
-
-          Category: {
-            type: "select",
-
-            select:
-              category.trim()
-                ? {
-                    name:
-                      category.trim(),
-                  }
-                : null,
-          },
-
-          ...(dueDate
-            ? {
-                "Due Date": {
-                  type:
-                    "date" as const,
-
-                  date: {
-                    start:
-                      dueDate,
-
-                    end: null,
-
-                    time_zone:
-                      null,
-                  },
-                },
-              }
-            : {}),
+          emoji:
+            getCategoryEmoji(
+              cleanCategory
+            ) as any,
         },
+
+        properties:
+          pageProperties,
 
         children: [
           {
-            object:
-              "block",
+            object: "block",
+            type: "callout",
 
-            type:
-              "heading_2",
+            callout: {
+              icon: {
+                type: "emoji",
+                emoji: "✨",
+              },
+
+              color:
+                "purple_background",
+
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      "Structured automatically by Voice to Notion",
+                  },
+
+                  annotations: {
+                    bold: true,
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type: "divider",
+            divider: {},
+          },
+
+          {
+            object: "block",
+            type: "heading_2",
 
             heading_2: {
               rich_text: [
                 {
-                  type:
-                    "text",
-
+                  type: "text",
                   text: {
                     content:
-                      "Summary",
+                      "✦ Summary",
                   },
                 },
               ],
@@ -303,63 +592,15 @@ export async function POST(
             },
           },
 
-          {
-            object:
-              "block",
-
-            type:
-              "paragraph",
-
-            paragraph: {
-              rich_text: [
-                {
-                  type:
-                    "text",
-
-                  text: {
-                    content:
-                      summary.trim() ||
-                      "No summary available.",
-                  },
-                },
-              ],
-            },
-          },
-
-          {
-            object:
-              "block",
-
-            type:
-              "heading_2",
-
-            heading_2: {
-              rich_text: [
-                {
-                  type:
-                    "text",
-
-                  text: {
-                    content:
-                      "Action Items",
-                  },
-                },
-              ],
-
-              is_toggleable:
-                false,
-            },
-          },
-
-          ...cleanActionItems.map(
-            (item) => ({
+          ...summaryChunks.map(
+            (chunk) => ({
               object:
                 "block" as const,
 
               type:
-                "to_do" as const,
+                "paragraph" as const,
 
-              to_do: {
+              paragraph: {
                 rich_text: [
                   {
                     type:
@@ -367,33 +608,26 @@ export async function POST(
 
                     text: {
                       content:
-                        item,
+                        chunk,
                     },
                   },
                 ],
-
-                checked:
-                  false,
               },
             })
           ),
 
           {
-            object:
-              "block",
-
-            type:
-              "heading_2",
+            object: "block",
+            type: "heading_2",
 
             heading_2: {
               rich_text: [
                 {
-                  type:
-                    "text",
+                  type: "text",
 
                   text: {
                     content:
-                      "Original Transcript",
+                      "◈ Capture Details",
                   },
                 },
               ],
@@ -404,22 +638,262 @@ export async function POST(
           },
 
           {
-            object:
-              "block",
-
+            object: "block",
             type:
-              "paragraph",
+              "bulleted_list_item",
+
+            bulleted_list_item: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      `Category: ${cleanCategory}`,
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type:
+              "bulleted_list_item",
+
+            bulleted_list_item: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      `Priority: ${cleanPriority}`,
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type:
+              "bulleted_list_item",
+
+            bulleted_list_item: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      `Action items: ${cleanActionItems.length}`,
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type:
+              "bulleted_list_item",
+
+            bulleted_list_item: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      dueDate
+                        ? `Due date: ${dueDate}`
+                        : "Due date: None",
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type:
+              "bulleted_list_item",
+
+            bulleted_list_item: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      "Source: Voice capture",
+                  },
+                },
+              ],
+            },
+          },
+
+          {
+            object: "block",
+            type: "divider",
+            divider: {},
+          },
+
+          {
+            object: "block",
+            type: "heading_2",
+
+            heading_2: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      "✓ Action Items",
+                  },
+                },
+              ],
+
+              is_toggleable:
+                false,
+            },
+          },
+
+          ...(cleanActionItems.length
+            ? cleanActionItems.map(
+                (item) => ({
+                  object:
+                    "block" as const,
+
+                  type:
+                    "to_do" as const,
+
+                  to_do: {
+                    rich_text: [
+                      {
+                        type:
+                          "text" as const,
+
+                        text: {
+                          content:
+                            item,
+                        },
+                      },
+                    ],
+
+                    checked:
+                      false,
+                  },
+                })
+              )
+            : [
+                {
+                  object:
+                    "block" as const,
+
+                  type:
+                    "paragraph" as const,
+
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type:
+                          "text" as const,
+
+                        text: {
+                          content:
+                            "No action items were detected.",
+                        },
+
+                        annotations: {
+                          italic:
+                            true,
+
+                          color:
+                            "gray" as const,
+                        },
+                      },
+                    ],
+                  },
+                },
+              ]),
+
+          {
+            object: "block",
+            type: "divider",
+            divider: {},
+          },
+
+          {
+            object: "block",
+            type: "heading_2",
+
+            heading_2: {
+              rich_text: [
+                {
+                  type: "text",
+
+                  text: {
+                    content:
+                      "🎙 Original Transcript",
+                  },
+                },
+              ],
+
+              is_toggleable:
+                false,
+            },
+          },
+
+          ...transcriptChunks.map(
+            (chunk) => ({
+              object:
+                "block" as const,
+
+              type:
+                "quote" as const,
+
+              quote: {
+                rich_text: [
+                  {
+                    type:
+                      "text" as const,
+
+                    text: {
+                      content:
+                        chunk,
+                    },
+                  },
+                ],
+              },
+            })
+          ),
+
+          {
+            object: "block",
+            type: "divider",
+            divider: {},
+          },
+
+          {
+            object: "block",
+            type: "paragraph",
 
             paragraph: {
               rich_text: [
                 {
-                  type:
-                    "text",
+                  type: "text",
 
                   text: {
                     content:
-                      transcript.trim() ||
-                      "No transcript available.",
+                      "✦ Captured, structured and organized with Voice to Notion",
+                  },
+
+                  annotations: {
+                    italic: true,
+                    color: "gray",
                   },
                 },
               ],
@@ -431,13 +905,23 @@ export async function POST(
     return NextResponse.json({
       success: true,
 
-      pageId:
-        page.id,
+      pageId: page.id,
 
       url:
         "url" in page
           ? page.url
           : null,
+
+      metadata: {
+        category:
+          cleanCategory,
+
+        priority:
+          cleanPriority,
+
+        actionCount:
+          cleanActionItems.length,
+      },
 
       workspace: {
         id:
@@ -447,8 +931,7 @@ export async function POST(
           connection.workspace_name,
       },
 
-      dataSourceId:
-        connection.selected_data_source_id,
+      dataSourceId,
     });
   } catch (error) {
     console.error(
