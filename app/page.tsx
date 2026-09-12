@@ -42,6 +42,10 @@ type ProcessingStep =
   | "ready"
   | "saving";
 
+type MobileWorkspaceTab =
+  | "transcript"
+  | "note";
+
 type CaptureHistoryItem = {
   id: string;
   createdAt: string;
@@ -100,6 +104,14 @@ export default function Home() {
   ] =
     useState<ProcessingStep>(
       "idle"
+    );
+
+  const [
+    mobileWorkspaceTab,
+    setMobileWorkspaceTab,
+  ] =
+    useState<MobileWorkspaceTab>(
+      "transcript"
     );
 
   const [error, setError] =
@@ -245,6 +257,12 @@ export default function Home() {
     selectedDataSourceId !==
     savedDataSourceId;
 
+  /*
+    ========================================================
+    LOAD ACCOUNT
+    ========================================================
+  */
+
   useEffect(() => {
     async function loadAccount() {
       const {
@@ -260,6 +278,12 @@ export default function Home() {
 
     loadAccount();
   }, []);
+
+  /*
+    ========================================================
+    LOAD HISTORY
+    ========================================================
+  */
 
   useEffect(() => {
     try {
@@ -290,7 +314,9 @@ export default function Home() {
             })
           );
 
-        setHistory(normalized);
+        setHistory(
+          normalized
+        );
       }
     } catch (err) {
       console.error(
@@ -298,31 +324,64 @@ export default function Home() {
         err
       );
     } finally {
-      setHistoryLoaded(true);
+      setHistoryLoaded(
+        true
+      );
     }
   }, []);
 
+  /*
+    ========================================================
+    SAVE HISTORY
+    ========================================================
+  */
+
   useEffect(() => {
-    if (!historyLoaded) {
+    if (
+      !historyLoaded
+    ) {
       return;
     }
 
-    localStorage.setItem(
-      HISTORY_STORAGE_KEY,
-      JSON.stringify(history)
-    );
+    try {
+      localStorage.setItem(
+        HISTORY_STORAGE_KEY,
+        JSON.stringify(
+          history
+        )
+      );
+    } catch (err) {
+      console.error(
+        "HISTORY SAVE ERROR:",
+        err
+      );
+    }
   }, [
     history,
     historyLoaded,
   ]);
 
+  /*
+    ========================================================
+    LOAD NOTION DATABASES
+    ========================================================
+  */
+
   useEffect(() => {
     loadNotionDatabases();
   }, []);
 
+  /*
+    ========================================================
+    CLEANUP
+    ========================================================
+  */
+
   useEffect(() => {
     return () => {
-      if (audioUrl) {
+      if (
+        audioUrl
+      ) {
         URL.revokeObjectURL(
           audioUrl
         );
@@ -338,16 +397,26 @@ export default function Home() {
     };
   }, [audioUrl]);
 
+  /*
+    ========================================================
+    AUTH
+    ========================================================
+  */
+
   async function signOut() {
     try {
-      setSigningOut(true);
+      setSigningOut(
+        true
+      );
 
       const {
         error: signOutError,
       } =
         await supabaseBrowser.auth.signOut();
 
-      if (signOutError) {
+      if (
+        signOutError
+      ) {
         throw signOutError;
       }
 
@@ -360,14 +429,30 @@ export default function Home() {
         err
       );
 
-      setSigningOut(false);
+      setSigningOut(
+        false
+      );
     }
   }
 
+  /*
+    ========================================================
+    NOTION
+    ========================================================
+  */
+
   async function loadNotionDatabases() {
-    setLoadingDatabases(true);
-    setNotionDatabaseError("");
-    setNotionDatabaseMessage("");
+    setLoadingDatabases(
+      true
+    );
+
+    setNotionDatabaseError(
+      ""
+    );
+
+    setNotionDatabaseMessage(
+      ""
+    );
 
     try {
       const {
@@ -375,7 +460,9 @@ export default function Home() {
       } =
         await supabaseBrowser.auth.getSession();
 
-      if (!session) {
+      if (
+        !session
+      ) {
         window.location.href =
           "/login";
 
@@ -396,7 +483,9 @@ export default function Home() {
       const data =
         (await response.json()) as NotionDatabasesResponse;
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           data.error ||
             "Could not load Notion databases."
@@ -404,7 +493,8 @@ export default function Home() {
       }
 
       const sources =
-        data.dataSources ?? [];
+        data.dataSources ??
+        [];
 
       setNotionDataSources(
         sources
@@ -422,7 +512,8 @@ export default function Home() {
       const valid =
         sources.some(
           (source) =>
-            source.id === stored
+            source.id ===
+            stored
         )
           ? stored
           : "";
@@ -435,24 +526,41 @@ export default function Home() {
         valid
       );
     } catch (err) {
+      console.error(
+        "LOAD NOTION DATABASES ERROR:",
+        err
+      );
+
       setNotionDatabaseError(
         err instanceof Error
           ? err.message
           : "Could not load Notion databases."
       );
     } finally {
-      setLoadingDatabases(false);
+      setLoadingDatabases(
+        false
+      );
     }
   }
 
   async function connectNotion() {
     try {
+      setNotionDatabaseError(
+        ""
+      );
+
+      setNotionDatabaseMessage(
+        ""
+      );
+
       const {
         data: { session },
       } =
         await supabaseBrowser.auth.getSession();
 
-      if (!session) {
+      if (
+        !session
+      ) {
         window.location.href =
           "/login";
 
@@ -473,10 +581,20 @@ export default function Home() {
       const data =
         await response.json();
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           data.error ||
             "Could not connect Notion."
+        );
+      }
+
+      if (
+        !data.authorizationUrl
+      ) {
+        throw new Error(
+          "No Notion authorization URL was returned."
         );
       }
 
@@ -492,7 +610,9 @@ export default function Home() {
   }
 
   async function saveNotionDatabaseSelection() {
-    if (!selectedDataSourceId) {
+    if (
+      !selectedDataSourceId
+    ) {
       setNotionDatabaseError(
         "Choose a Notion database first."
       );
@@ -500,9 +620,17 @@ export default function Home() {
       return;
     }
 
-    setSavingDatabase(true);
-    setNotionDatabaseError("");
-    setNotionDatabaseMessage("");
+    setSavingDatabase(
+      true
+    );
+
+    setNotionDatabaseError(
+      ""
+    );
+
+    setNotionDatabaseMessage(
+      ""
+    );
 
     try {
       const {
@@ -510,7 +638,9 @@ export default function Home() {
       } =
         await supabaseBrowser.auth.getSession();
 
-      if (!session) {
+      if (
+        !session
+      ) {
         window.location.href =
           "/login";
 
@@ -521,7 +651,8 @@ export default function Home() {
         await fetch(
           "/api/notion/database/select",
           {
-            method: "POST",
+            method:
+              "POST",
 
             headers: {
               "Content-Type":
@@ -542,7 +673,9 @@ export default function Home() {
       const data =
         (await response.json()) as NotionDatabaseSelectionResponse;
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           data.error ||
             "Could not save destination."
@@ -563,14 +696,27 @@ export default function Home() {
           : "Could not save destination."
       );
     } finally {
-      setSavingDatabase(false);
+      setSavingDatabase(
+        false
+      );
     }
   }
 
   function resetNotionState() {
-    setNotionSaved(false);
-    setNotionPageUrl(null);
+    setNotionSaved(
+      false
+    );
+
+    setNotionPageUrl(
+      null
+    );
   }
+
+  /*
+    ========================================================
+    HISTORY
+    ========================================================
+  */
 
   function createHistoryItem(
     structuredNote: StructuredNote,
@@ -629,32 +775,60 @@ export default function Home() {
     );
   }
 
+  /*
+    ========================================================
+    RECORDING
+    ========================================================
+  */
+
   async function startRecording() {
     try {
-      setError("");
-      setNote(null);
-      setTranscript("");
+      setError(
+        ""
+      );
+
+      setNote(
+        null
+      );
+
+      setTranscript(
+        ""
+      );
+
+      setMobileWorkspaceTab(
+        "transcript"
+      );
 
       resetNotionState();
 
       currentHistoryIdRef.current =
         null;
 
-      if (audioUrl) {
+      if (
+        audioUrl
+      ) {
         URL.revokeObjectURL(
           audioUrl
         );
 
-        setAudioUrl(null);
+        setAudioUrl(
+          null
+        );
       }
 
-      setAudioBlob(null);
-      setRecordingSeconds(0);
+      setAudioBlob(
+        null
+      );
+
+      setRecordingSeconds(
+        0
+      );
 
       const stream =
         await navigator.mediaDevices.getUserMedia(
           {
-            audio: true,
+            audio:
+              true,
           }
         );
 
@@ -672,7 +846,8 @@ export default function Home() {
       recorder.ondataavailable =
         (event) => {
           if (
-            event.data.size > 0
+            event.data.size >
+            0
           ) {
             audioChunksRef.current.push(
               event.data
@@ -698,8 +873,13 @@ export default function Home() {
                 blob
               );
 
-            setAudioBlob(blob);
-            setAudioUrl(url);
+            setAudioBlob(
+              blob
+            );
+
+            setAudioUrl(
+              url
+            );
 
             stream
               .getTracks()
@@ -726,7 +906,9 @@ export default function Home() {
 
       recorder.start();
 
-      setIsRecording(true);
+      setIsRecording(
+        true
+      );
 
       setProcessingStep(
         "recording"
@@ -737,18 +919,24 @@ export default function Home() {
           () => {
             setRecordingSeconds(
               (previous) =>
-                previous + 1
+                previous +
+                1
             );
           },
           1000
         );
-    } catch {
+    } catch (err) {
+      console.error(
+        "MICROPHONE ERROR:",
+        err
+      );
+
       setProcessingStep(
         "idle"
       );
 
       setError(
-        "Could not access the microphone."
+        "Could not access the microphone. Check your browser microphone permission."
       );
     }
   }
@@ -767,7 +955,9 @@ export default function Home() {
 
     recorder.stop();
 
-    setIsRecording(false);
+    setIsRecording(
+      false
+    );
 
     if (
       recordingTimerRef.current
@@ -781,6 +971,12 @@ export default function Home() {
     }
   }
 
+  /*
+    ========================================================
+    TRANSCRIPTION
+    ========================================================
+  */
+
   async function transcribeBlob(
     blob: Blob
   ) {
@@ -792,9 +988,15 @@ export default function Home() {
       new FormData();
 
     const extension =
-      blob.type.includes("ogg")
+      blob.type.includes(
+        "ogg"
+      )
         ? "ogg"
-        : "webm";
+        : blob.type.includes(
+              "mp4"
+            )
+          ? "mp4"
+          : "webm";
 
     formData.append(
       "audio",
@@ -806,15 +1008,20 @@ export default function Home() {
       await fetch(
         "/api/transcribe",
         {
-          method: "POST",
-          body: formData,
+          method:
+            "POST",
+
+          body:
+            formData,
         }
       );
 
     const data =
       await response.json();
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         data.error ||
           "Transcription failed."
@@ -823,6 +1030,12 @@ export default function Home() {
 
     return data.transcript as string;
   }
+
+  /*
+    ========================================================
+    STRUCTURE NOTE
+    ========================================================
+  */
 
   async function structureText(
     text: string
@@ -835,7 +1048,8 @@ export default function Home() {
       await fetch(
         "/api/structure-note",
         {
-          method: "POST",
+          method:
+            "POST",
 
           headers: {
             "Content-Type":
@@ -844,7 +1058,8 @@ export default function Home() {
 
           body:
             JSON.stringify({
-              transcript: text,
+              transcript:
+                text,
             }),
         }
       );
@@ -852,7 +1067,9 @@ export default function Home() {
     const data =
       await response.json();
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         data.error ||
           "Could not structure note."
@@ -873,7 +1090,9 @@ export default function Home() {
   ) {
     try {
       const newTranscript =
-        await transcribeBlob(blob);
+        await transcribeBlob(
+          blob
+        );
 
       setTranscript(
         newTranscript
@@ -884,10 +1103,16 @@ export default function Home() {
           newTranscript
         );
 
-      setNote(structured);
+      setNote(
+        structured
+      );
 
       setProcessingStep(
         "ready"
+      );
+
+      setMobileWorkspaceTab(
+        "note"
       );
 
       currentHistoryIdRef.current =
@@ -913,22 +1138,32 @@ export default function Home() {
   ) {
     event.preventDefault();
 
-    if (!transcript.trim()) {
+    if (
+      !transcript.trim()
+    ) {
       return;
     }
 
     try {
-      setError("");
+      setError(
+        ""
+      );
 
       const structured =
         await structureText(
           transcript.trim()
         );
 
-      setNote(structured);
+      setNote(
+        structured
+      );
 
       setProcessingStep(
         "ready"
+      );
+
+      setMobileWorkspaceTab(
+        "note"
       );
 
       currentHistoryIdRef.current =
@@ -950,7 +1185,9 @@ export default function Home() {
   }
 
   async function retranscribeRecording() {
-    if (!audioBlob) {
+    if (
+      !audioBlob
+    ) {
       return;
     }
 
@@ -958,6 +1195,12 @@ export default function Home() {
       audioBlob
     );
   }
+
+  /*
+    ========================================================
+    SAVE TO NOTION
+    ========================================================
+  */
 
   async function saveToNotion() {
     if (
@@ -971,7 +1214,9 @@ export default function Home() {
       "saving"
     );
 
-    setError("");
+    setError(
+      ""
+    );
 
     try {
       const {
@@ -979,7 +1224,9 @@ export default function Home() {
       } =
         await supabaseBrowser.auth.getSession();
 
-      if (!session) {
+      if (
+        !session
+      ) {
         window.location.href =
           "/login";
 
@@ -990,7 +1237,8 @@ export default function Home() {
         await fetch(
           "/api/notion/save",
           {
-            method: "POST",
+            method:
+              "POST",
 
             headers: {
               "Content-Type":
@@ -1002,7 +1250,8 @@ export default function Home() {
 
             body:
               JSON.stringify({
-                title: note.title,
+                title:
+                  note.title,
 
                 summary:
                   note.summary,
@@ -1027,7 +1276,9 @@ export default function Home() {
       const data =
         (await response.json()) as NotionSaveResponse;
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           data.details ||
             data.error ||
@@ -1035,10 +1286,13 @@ export default function Home() {
         );
       }
 
-      setNotionSaved(true);
+      setNotionSaved(
+        true
+      );
 
       setNotionPageUrl(
-        data.url ?? null
+        data.url ??
+          null
       );
 
       if (
@@ -1077,12 +1331,20 @@ export default function Home() {
     }
   }
 
+  /*
+    ========================================================
+    NOTE EDITING
+    ========================================================
+  */
+
   function updateNote(
     changes: Partial<StructuredNote>
   ) {
     setNote(
       (current) => {
-        if (!current) {
+        if (
+          !current
+        ) {
           return null;
         }
 
@@ -1097,7 +1359,8 @@ export default function Home() {
           updateHistoryItem(
             currentHistoryIdRef.current,
             {
-              note: updated,
+              note:
+                updated,
             }
           );
         }
@@ -1113,22 +1376,30 @@ export default function Home() {
     index: number,
     value: string
   ) {
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
     const items =
-      [...note.actionItems];
+      [
+        ...note.actionItems,
+      ];
 
-    items[index] = value;
+    items[index] =
+      value;
 
     updateNote({
-      actionItems: items,
+      actionItems:
+        items,
     });
   }
 
   function addActionItem() {
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
@@ -1143,35 +1414,70 @@ export default function Home() {
   function removeActionItem(
     index: number
   ) {
-    if (!note) {
+    if (
+      !note
+    ) {
       return;
     }
 
     updateNote({
       actionItems:
         note.actionItems.filter(
-          (_, itemIndex) =>
-            itemIndex !== index
+          (
+            _,
+            itemIndex
+          ) =>
+            itemIndex !==
+            index
         ),
     });
   }
 
+  /*
+    ========================================================
+    RESET
+    ========================================================
+  */
+
   function resetCapture() {
-    if (audioUrl) {
+    if (
+      audioUrl
+    ) {
       URL.revokeObjectURL(
         audioUrl
       );
     }
 
-    setAudioUrl(null);
-    setAudioBlob(null);
-    setTranscript("");
-    setNote(null);
-    setError("");
-    setRecordingSeconds(0);
+    setAudioUrl(
+      null
+    );
+
+    setAudioBlob(
+      null
+    );
+
+    setTranscript(
+      ""
+    );
+
+    setNote(
+      null
+    );
+
+    setError(
+      ""
+    );
+
+    setRecordingSeconds(
+      0
+    );
 
     setProcessingStep(
       "idle"
+    );
+
+    setMobileWorkspaceTab(
+      "transcript"
     );
 
     currentHistoryIdRef.current =
@@ -1210,22 +1516,35 @@ export default function Home() {
       "ready"
     );
 
+    setMobileWorkspaceTab(
+      "note"
+    );
+
     window.scrollTo({
       top: 0,
-      behavior: "smooth",
+      behavior:
+        "smooth",
     });
   }
+
+  /*
+    ========================================================
+    HELPERS
+    ========================================================
+  */
 
   function formatRecordingTime(
     seconds: number
   ) {
     const minutes =
       Math.floor(
-        seconds / 60
+        seconds /
+          60
       );
 
     const remaining =
-      seconds % 60;
+      seconds %
+      60;
 
     return `${String(
       minutes
@@ -1241,7 +1560,9 @@ export default function Home() {
   }
 
   function systemLabel() {
-    if (isRecording) {
+    if (
+      isRecording
+    ) {
       return "Listening";
     }
 
@@ -1276,95 +1597,145 @@ export default function Home() {
     return "System Ready";
   }
 
+  /*
+    ========================================================
+    RENDER
+    ========================================================
+  */
+
   return (
     <AuthGate>
-      <main className="vtn-shell">
+      <main className="vtn-shell vtn-mobile-shell">
         <div className="vtn-orb vtn-orb-purple" />
         <div className="vtn-orb vtn-orb-cyan" />
 
-        <div className="vtn-container pb-20 pt-5">
-          <header className="sticky top-4 z-50 mb-8">
-            <div className="vtn-glass flex items-center justify-between gap-4 rounded-[22px] px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 font-black text-white">
+        <div className="vtn-container pb-28 pt-4 md:pb-20 md:pt-5">
+
+          {/* =============================================
+              HUD
+          ============================================== */}
+
+          <header className="vtn-mobile-hud sticky top-3 z-50 mb-6">
+            <div className="vtn-glass flex items-center justify-between gap-3 rounded-[20px] px-3 py-3 sm:px-5">
+
+              <div className="flex min-w-0 items-center gap-3">
+
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-blue-500 font-black text-white shadow-[0_0_26px_rgba(139,92,246,0.3)]">
                   V
                 </div>
 
-                <div>
-                  <p className="text-sm font-bold text-[var(--foreground)]">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">
                     Voice to Notion
                   </p>
 
                   <div className="mt-1 flex items-center gap-2">
                     <span className="vtn-status-dot" />
 
-                    <span className="text-[10px] uppercase tracking-[0.13em] text-[var(--muted)]">
+                    <span className="truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       {systemLabel()}
                     </span>
                   </div>
                 </div>
+
               </div>
 
-              <div className="flex items-center gap-3">
-                {savedDataSourceId && (
-                  <div className="vtn-badge hidden md:flex">
-                    <span className="vtn-status-dot" />
-                    Notion synced
-                  </div>
-                )}
+              <div className="flex shrink-0 items-center gap-2">
 
                 <ThemeToggle />
 
-                <span className="hidden max-w-[180px] truncate text-xs text-[var(--muted)] lg:block">
-                  {accountEmail}
-                </span>
-
                 <button
                   type="button"
-                  onClick={signOut}
-                  disabled={signingOut}
-                  className="vtn-secondary px-3 py-2 text-xs"
+                  onClick={
+                    signOut
+                  }
+                  disabled={
+                    signingOut
+                  }
+                  className="vtn-mobile-logout vtn-secondary"
                 >
                   {signingOut
                     ? "..."
-                    : "Log out"}
+                    : "↗"}
                 </button>
+
               </div>
+
             </div>
           </header>
 
-          <section className="mb-8">
+          {/* =============================================
+              MOBILE HERO
+          ============================================== */}
+
+          <section className="vtn-mobile-hero mb-5 text-center md:hidden">
+
+            <div className="vtn-eyebrow mb-3">
+              <span className="vtn-eyebrow-dot" />
+              Neural Capture
+            </div>
+
+            <h1 className="vtn-gradient-text text-[2rem] font-bold leading-[1.05] tracking-[-0.05em]">
+              Capture your thought.
+            </h1>
+
+            <p className="mx-auto mt-3 max-w-[300px] text-xs leading-5 text-[var(--muted)]">
+              Speak once. AI organizes it and sends it to Notion.
+            </p>
+
+          </section>
+
+          {/* =============================================
+              DESKTOP HERO
+          ============================================== */}
+
+          <section className="mb-8 hidden md:block">
+
             <div className="vtn-eyebrow mb-3">
               <span className="vtn-eyebrow-dot" />
               Neural capture workspace
             </div>
 
-            <h1 className="vtn-gradient-text max-w-3xl text-3xl font-bold tracking-[-0.04em] sm:text-5xl">
+            <h1 className="vtn-gradient-text max-w-3xl text-4xl font-bold tracking-[-0.045em] lg:text-5xl">
               Capture thoughts at the speed of speech.
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               Speak once. AI structures your thought and sends it directly into Notion.
             </p>
+
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <aside className="space-y-6">
+          <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+
+            {/* ===========================================
+                LEFT SIDE
+            ============================================ */}
+
+            <aside className="space-y-5">
+
+              {/* =========================================
+                  VOICE HERO
+              ========================================== */}
+
               <section
-                className={`vtn-card p-6 ${
+                className={`vtn-card vtn-mobile-voice-card p-5 sm:p-6 ${
                   isRecording
                     ? "vtn-recording"
                     : ""
                 }`}
               >
+
                 <div className="relative z-10">
-                  <div className="flex justify-between">
+
+                  <div className="flex items-center justify-between">
+
                     <div>
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
                         Voice Core
                       </span>
 
-                      <h2 className="mt-2 text-xl font-semibold">
+                      <h2 className="mt-1 text-lg font-semibold md:text-xl">
                         Capture
                       </h2>
                     </div>
@@ -1374,9 +1745,11 @@ export default function Home() {
                         recordingSeconds
                       )}
                     </div>
+
                   </div>
 
-                  <div className="flex flex-col items-center py-8 text-center">
+                  <div className="flex flex-col items-center py-6 sm:py-8">
+
                     <button
                       type="button"
                       onClick={
@@ -1389,35 +1762,87 @@ export default function Home() {
                         !isRecording
                       }
                       className="rounded-full"
+                      aria-label={
+                        isRecording
+                          ? "Stop recording"
+                          : "Start recording"
+                      }
                     >
-                      <div className="vtn-record-orb">
-                        <div className="vtn-record-core flex items-center justify-center text-white">
+
+                      <div className="vtn-record-orb vtn-mobile-record-orb">
+                        <div className="vtn-record-core vtn-mobile-record-core flex items-center justify-center text-white">
+
                           {isRecording
-                            ? "■"
-                            : "🎙"}
+                            ? (
+                              <span className="h-5 w-5 rounded-[5px] bg-white" />
+                            )
+                            : (
+                              <svg
+                                width="31"
+                                height="31"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                aria-hidden="true"
+                              >
+                                <rect
+                                  x="9"
+                                  y="3"
+                                  width="6"
+                                  height="11"
+                                  rx="3"
+                                  fill="currentColor"
+                                />
+
+                                <path
+                                  d="M6.5 11.5C6.5 14.54 8.96 17 12 17C15.04 17 17.5 14.54 17.5 11.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                />
+
+                                <path
+                                  d="M12 17V21"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            )}
+
                         </div>
                       </div>
+
                     </button>
 
-                    <p className="mt-5 font-semibold">
+                    <p className="mt-5 text-sm font-semibold">
                       {isRecording
-                        ? "Listening"
+                        ? "Listening..."
                         : isBusy
                           ? systemLabel()
                           : "Tap to speak"}
                     </p>
 
+                    <p className="mt-2 text-center text-[11px] leading-5 text-[var(--muted)] md:hidden">
+                      {isRecording
+                        ? "Speak naturally, then tap again to stop."
+                        : "Your voice becomes structured knowledge automatically."}
+                    </p>
+
                     <div
-                      className={`vtn-waveform mt-5 ${
+                      className={`vtn-waveform mt-4 ${
                         isRecording
                           ? "is-active"
                           : ""
                       }`}
                     >
                       {Array.from({
-                        length: 13,
+                        length:
+                          15,
                       }).map(
-                        (_, index) => (
+                        (
+                          _,
+                          index
+                        ) => (
                           <span
                             key={
                               index
@@ -1426,77 +1851,98 @@ export default function Home() {
                         )
                       )}
                     </div>
+
                   </div>
 
                   {audioUrl && (
-                    <>
+                    <div className="mt-2">
                       <audio
                         controls
-                        src={audioUrl}
+                        src={
+                          audioUrl
+                        }
                         className="w-full"
                       />
 
                       <div className="mt-3 grid grid-cols-2 gap-2">
+
                         <button
+                          type="button"
                           onClick={
                             retranscribeRecording
                           }
-                          className="vtn-secondary py-2 text-xs"
+                          className="vtn-secondary min-h-11 px-3 text-xs"
                         >
                           Process Again
                         </button>
 
                         <button
+                          type="button"
                           onClick={
                             resetCapture
                           }
-                          className="vtn-secondary py-2 text-xs"
+                          className="vtn-secondary min-h-11 px-3 text-xs"
                         >
                           New Capture
                         </button>
+
                       </div>
-                    </>
+                    </div>
                   )}
+
                 </div>
+
               </section>
 
-              <section className="vtn-card p-5">
-                <div className="relative z-10">
-                  <div className="mb-4 flex justify-between">
-                    <div>
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
-                        Destination
-                      </span>
+              {/* =========================================
+                  COMPACT NOTION DESTINATION
+              ========================================== */}
 
-                      <h2 className="mt-2 text-lg font-semibold">
-                        Notion Sync
-                      </h2>
+              <section className="vtn-card vtn-mobile-destination p-4 sm:p-5">
+
+                <div className="relative z-10">
+
+                  <div className="flex items-center justify-between gap-3">
+
+                    <div className="flex min-w-0 items-center gap-3">
+
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input-bg)] text-xs font-black">
+                        N
+                      </div>
+
+                      <div className="min-w-0">
+
+                        <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                          Destination
+                        </span>
+
+                        <h2 className="mt-0.5 truncate text-sm font-semibold">
+                          {notionWorkspaceName ||
+                            "Notion"}
+                        </h2>
+
+                      </div>
+
                     </div>
 
-                    {savedDataSourceId && (
-                      <span className="vtn-success rounded-full px-2.5 py-1 text-[10px]">
-                        Live
+                    {savedDataSourceId ? (
+                      <span className="vtn-success shrink-0 rounded-full px-2.5 py-1 text-[9px] font-semibold">
+                        ● LIVE
+                      </span>
+                    ) : (
+                      <span className="vtn-badge shrink-0">
+                        Setup
                       </span>
                     )}
+
                   </div>
 
                   {loadingDatabases ? (
-                    <p className="text-xs text-[var(--muted)]">
-                      Loading workspace...
+                    <p className="mt-4 text-xs text-[var(--muted)]">
+                      Loading destination...
                     </p>
                   ) : (
                     <>
-                      {notionWorkspaceName && (
-                        <div className="mb-3 rounded-xl border border-[var(--border)] p-3">
-                          <p className="text-[9px] uppercase text-[var(--muted)]">
-                            Workspace
-                          </p>
-
-                          <p className="mt-1 text-xs font-semibold">
-                            {notionWorkspaceName}
-                          </p>
-                        </div>
-                      )}
 
                       <select
                         value={
@@ -1513,14 +1959,17 @@ export default function Home() {
                             ""
                           );
                         }}
-                        className="vtn-input p-3 text-xs"
+                        className="vtn-input mt-4 min-h-12 px-3 text-xs"
                       >
+
                         <option value="">
                           Select database...
                         </option>
 
                         {notionDataSources.map(
-                          (source) => (
+                          (
+                            source
+                          ) => (
                             <option
                               key={
                                 source.id
@@ -1533,45 +1982,52 @@ export default function Home() {
                             </option>
                           )
                         )}
+
                       </select>
 
-                      <button
-                        onClick={
-                          saveNotionDatabaseSelection
-                        }
-                        disabled={
-                          !selectedDataSourceId ||
-                          savingDatabase ||
-                          !destinationChanged
-                        }
-                        className="vtn-primary mt-3 w-full py-2.5 text-xs"
-                      >
-                        {savingDatabase
-                          ? "Saving..."
-                          : destinationChanged
-                            ? "Sync Destination"
-                            : "Destination Synced"}
-                      </button>
+                      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
 
-                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
+                          type="button"
+                          onClick={
+                            saveNotionDatabaseSelection
+                          }
+                          disabled={
+                            !selectedDataSourceId ||
+                            savingDatabase ||
+                            !destinationChanged
+                          }
+                          className="vtn-primary min-h-11 px-3 text-xs"
+                        >
+                          {savingDatabase
+                            ? "Saving..."
+                            : destinationChanged
+                              ? "Sync Destination"
+                              : "Destination Synced"}
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={
                             loadNotionDatabases
                           }
-                          className="vtn-secondary py-2 text-xs"
+                          className="vtn-secondary min-h-11 min-w-11 px-3"
+                          aria-label="Refresh Notion databases"
                         >
-                          Refresh
+                          ↻
                         </button>
 
-                        <button
-                          onClick={
-                            connectNotion
-                          }
-                          className="vtn-secondary py-2 text-xs"
-                        >
-                          Reconnect
-                        </button>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={
+                          connectNotion
+                        }
+                        className="mt-2 w-full py-2 text-[10px] text-[var(--muted)] transition hover:text-[var(--foreground)]"
+                      >
+                        Reconnect Notion
+                      </button>
 
                       {notionDatabaseError && (
                         <div className="vtn-error mt-3 rounded-xl p-3 text-xs">
@@ -1584,69 +2040,165 @@ export default function Home() {
                           {notionDatabaseMessage}
                         </div>
                       )}
+
                     </>
                   )}
+
                 </div>
+
               </section>
+
             </aside>
 
-            <section className="vtn-card p-6">
+            {/* ===========================================
+                WORKSPACE
+            ============================================ */}
+
+            <section className="vtn-card vtn-mobile-workspace p-4 sm:p-6">
+
               <div className="relative z-10">
-                <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
-                  Live Workspace
-                </span>
 
-                <h2 className="mt-2 text-2xl font-semibold">
-                  Thought processing
-                </h2>
+                <div className="hidden md:block">
 
-                <form
-                  onSubmit={handleSubmit}
-                  className="mt-6"
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                    Live Workspace
+                  </span>
+
+                  <h2 className="mt-2 text-2xl font-semibold">
+                    Thought processing
+                  </h2>
+
+                </div>
+
+                {/* =======================================
+                    MOBILE TABS
+                ======================================== */}
+
+                <div className="vtn-mobile-tabs md:hidden">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMobileWorkspaceTab(
+                        "transcript"
+                      )
+                    }
+                    className={
+                      mobileWorkspaceTab ===
+                      "transcript"
+                        ? "is-active"
+                        : ""
+                    }
+                  >
+                    Transcript
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMobileWorkspaceTab(
+                        "note"
+                      )
+                    }
+                    className={
+                      mobileWorkspaceTab ===
+                      "note"
+                        ? "is-active"
+                        : ""
+                    }
+                  >
+                    AI Note
+
+                    {note && (
+                      <span className="vtn-mobile-tab-dot" />
+                    )}
+                  </button>
+
+                </div>
+
+                {/* =======================================
+                    TRANSCRIPT
+                ======================================== */}
+
+                <div
+                  className={
+                    mobileWorkspaceTab ===
+                    "transcript"
+                      ? "block"
+                      : "hidden md:block"
+                  }
                 >
-                  <label className="mb-2 block text-[10px] uppercase text-[var(--muted)]">
-                    Live Transcript
-                  </label>
 
-                  <textarea
-                    value={transcript}
-                    onChange={(
-                      event
-                    ) => {
-                      setTranscript(
-                        event.target.value
-                      );
+                  <form
+                    onSubmit={
+                      handleSubmit
+                    }
+                    className="mt-4 md:mt-6"
+                  >
 
-                      resetNotionState();
-                    }}
-                    rows={7}
-                    placeholder="Your voice will appear here..."
-                    className="vtn-input min-h-[170px] p-4 text-sm leading-7"
-                  />
+                    <div className="mb-2 flex items-center justify-between">
 
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={
-                        isBusy ||
-                        !transcript.trim()
+                      <label className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Live Transcript
+                      </label>
+
+                      <span className="text-[9px] text-[var(--muted)]">
+                        {transcript.length} chars
+                      </span>
+
+                    </div>
+
+                    <textarea
+                      value={
+                        transcript
                       }
-                      className="vtn-secondary px-4 py-2.5 text-xs"
-                    >
-                      ✦ Re-structure with AI
-                    </button>
+                      onChange={(
+                        event
+                      ) => {
+                        setTranscript(
+                          event.target.value
+                        );
 
-                    <button
-                      type="button"
-                      onClick={
-                        resetCapture
-                      }
-                      className="vtn-secondary px-4 py-2.5 text-xs"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </form>
+                        resetNotionState();
+                      }}
+                      rows={7}
+                      placeholder="Your voice will appear here..."
+                      className="vtn-input vtn-mobile-transcript min-h-[150px] p-4 text-sm leading-6"
+                    />
+
+                    <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+
+                      <button
+                        type="submit"
+                        disabled={
+                          isBusy ||
+                          !transcript.trim()
+                        }
+                        className="vtn-secondary min-h-11 px-4 text-xs"
+                      >
+                        ✦ Structure with AI
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={
+                          resetCapture
+                        }
+                        className="vtn-secondary min-h-11 min-w-11 px-3 text-xs"
+                        aria-label="Clear capture"
+                      >
+                        ×
+                      </button>
+
+                    </div>
+
+                  </form>
+
+                </div>
+
+                {/* =======================================
+                    ERRORS
+                ======================================== */}
 
                 {error && (
                   <div className="vtn-error mt-4 rounded-xl p-3 text-xs">
@@ -1654,325 +2206,524 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="my-6 h-px bg-[var(--border)]" />
+                {/* =======================================
+                    AI NOTE
+                ======================================== */}
 
-                {!note ? (
-                  <div className="vtn-empty-ai">
-                    <div className="vtn-empty-ai-icon">
-                      ✦
+                <div
+                  className={`${
+                    mobileWorkspaceTab ===
+                    "note"
+                      ? "block"
+                      : "hidden md:block"
+                  } ${
+                    note
+                      ? "md:mt-6"
+                      : ""
+                  }`}
+                >
+
+                  {!note ? (
+                    <div className="vtn-empty-ai min-h-[230px]">
+
+                      <div className="vtn-empty-ai-icon">
+                        ✦
+                      </div>
+
+                      <p className="mt-4 text-sm font-semibold">
+                        Waiting for a thought
+                      </p>
+
+                      <p className="mt-2 max-w-[250px] text-center text-[11px] leading-5 text-[var(--muted)]">
+                        Record something and your structured note will appear here.
+                      </p>
+
                     </div>
+                  ) : (
+                    <div className="space-y-4">
 
-                    <p className="mt-4 font-semibold">
-                      Waiting for a thought
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="vtn-eyebrow">
-                      <span className="vtn-eyebrow-dot" />
-                      AI structured
-                    </div>
+                      <div className="flex items-center justify-between">
 
-                    <div>
-                      <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
-                        Title
-                      </label>
+                        <div className="vtn-eyebrow">
+                          <span className="vtn-eyebrow-dot" />
+                          AI structured
+                        </div>
 
-                      <input
-                        value={note.title}
-                        onChange={(
-                          event
-                        ) =>
-                          updateNote({
-                            title:
-                              event.target.value,
-                          })
-                        }
-                        className="vtn-input p-3.5"
-                      />
-                    </div>
+                        <span
+                          className={`vtn-priority-pill priority-${note.priority.toLowerCase()}`}
+                        >
+                          {note.priority}
+                        </span>
 
-                    <div>
-                      <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
-                        Summary
-                      </label>
+                      </div>
 
-                      <textarea
-                        value={note.summary}
-                        onChange={(
-                          event
-                        ) =>
-                          updateNote({
-                            summary:
-                              event.target.value,
-                          })
-                        }
-                        rows={3}
-                        className="vtn-input p-3.5"
-                      />
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
                       <div>
-                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
-                          Category
+
+                        <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                          Title
                         </label>
 
                         <input
                           value={
-                            note.category
+                            note.title
                           }
                           onChange={(
                             event
                           ) =>
                             updateNote({
-                              category:
+                              title:
                                 event.target.value,
                             })
                           }
-                          className="vtn-input p-3.5"
+                          className="vtn-input min-h-12 px-4 text-sm font-semibold"
                         />
+
                       </div>
 
                       <div>
-                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
-                          Priority
+
+                        <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                          Summary
                         </label>
 
-                        <select
+                        <textarea
                           value={
-                            note.priority
+                            note.summary
                           }
                           onChange={(
                             event
                           ) =>
                             updateNote({
-                              priority:
-                                event.target.value as Priority,
+                              summary:
+                                event.target.value,
                             })
                           }
-                          className="vtn-input p-3.5"
-                        >
-                          <option value="Low">
-                            Low
-                          </option>
-
-                          <option value="Medium">
-                            Medium
-                          </option>
-
-                          <option value="High">
-                            High
-                          </option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-[9px] uppercase text-[var(--muted)]">
-                          Due Date
-                        </label>
-
-                        <input
-                          type="date"
-                          value={
-                            note.dueDate ??
-                            ""
-                          }
-                          onChange={(
-                            event
-                          ) =>
-                            updateNote({
-                              dueDate:
-                                event.target.value ||
-                                null,
-                            })
-                          }
-                          className="vtn-input p-3.5"
+                          rows={3}
+                          className="vtn-input p-4 text-sm leading-6"
                         />
-                      </div>
-                    </div>
 
-                    <div className="rounded-2xl border border-[var(--border)] p-4">
-                      <div className="mb-3 flex justify-between">
+                      </div>
+
+                      {/* =================================
+                          SMART METADATA
+                      ================================== */}
+
+                      <div className="vtn-mobile-metadata-grid grid gap-3 md:grid-cols-3">
+
                         <div>
-                          <p className="text-xs font-semibold">
-                            Action Items
-                          </p>
 
-                          <p className="text-[10px] text-[var(--muted)]">
-                            AI extracted tasks
-                          </p>
+                          <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                            Category
+                          </label>
+
+                          <input
+                            value={
+                              note.category
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateNote({
+                                category:
+                                  event.target.value,
+                              })
+                            }
+                            className="vtn-input min-h-11 px-3 text-xs"
+                          />
+
                         </div>
+
+                        <div>
+
+                          <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                            Priority
+                          </label>
+
+                          <select
+                            value={
+                              note.priority
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateNote({
+                                priority:
+                                  event.target.value as Priority,
+                              })
+                            }
+                            className="vtn-input min-h-11 px-3 text-xs"
+                          >
+
+                            <option value="Low">
+                              Low
+                            </option>
+
+                            <option value="Medium">
+                              Medium
+                            </option>
+
+                            <option value="High">
+                              High
+                            </option>
+
+                          </select>
+
+                        </div>
+
+                        <div>
+
+                          <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                            Due Date
+                          </label>
+
+                          <input
+                            type="date"
+                            value={
+                              note.dueDate ??
+                              ""
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateNote({
+                                dueDate:
+                                  event.target.value ||
+                                  null,
+                              })
+                            }
+                            className="vtn-input min-h-11 px-3 text-xs"
+                          />
+
+                        </div>
+
+                      </div>
+
+                      {/* =================================
+                          ACTION ITEMS
+                      ================================== */}
+
+                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4">
+
+                        <div className="mb-3 flex items-center justify-between gap-3">
+
+                          <div>
+
+                            <p className="text-xs font-semibold">
+                              Action Items
+                            </p>
+
+                            <p className="mt-1 text-[9px] text-[var(--muted)]">
+                              {note.actionItems.length} extracted
+                            </p>
+
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={
+                              addActionItem
+                            }
+                            className="vtn-secondary min-h-9 px-3 text-[10px]"
+                          >
+                            + Add
+                          </button>
+
+                        </div>
+
+                        <div className="space-y-2">
+
+                          {note.actionItems.length ===
+                          0 ? (
+                            <p className="py-3 text-center text-[10px] text-[var(--muted)]">
+                              No actions detected.
+                            </p>
+                          ) : (
+                            note.actionItems.map(
+                              (
+                                item,
+                                index
+                              ) => (
+                                <div
+                                  key={
+                                    index
+                                  }
+                                  className="flex gap-2"
+                                >
+
+                                  <div className="mt-[13px] h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+
+                                  <input
+                                    value={
+                                      item
+                                    }
+                                    onChange={(
+                                      event
+                                    ) =>
+                                      updateActionItem(
+                                        index,
+                                        event.target.value
+                                      )
+                                    }
+                                    className="vtn-input flex-1 px-3 py-3 text-xs"
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      removeActionItem(
+                                        index
+                                      )
+                                    }
+                                    className="vtn-secondary min-w-10 px-2"
+                                  >
+                                    ×
+                                  </button>
+
+                                </div>
+                              )
+                            )
+                          )}
+
+                        </div>
+
+                      </div>
+
+                      {/* Desktop save button */}
+
+                      <div className="hidden md:block">
 
                         <button
                           type="button"
                           onClick={
-                            addActionItem
+                            saveToNotion
                           }
-                          className="vtn-secondary px-3 py-2 text-[10px]"
+                          disabled={
+                            processingStep ===
+                              "saving" ||
+                            notionSaved ||
+                            !savedDataSourceId
+                          }
+                          className="vtn-primary w-full py-3"
                         >
-                          + Add
+                          {processingStep ===
+                          "saving"
+                            ? "Syncing..."
+                            : notionSaved
+                              ? "Synced ✓"
+                              : "Send to Notion →"}
                         </button>
-                      </div>
 
-                      <div className="space-y-2">
-                        {note.actionItems.map(
-                          (
-                            item,
-                            index
-                          ) => (
-                            <div
-                              key={
-                                index
-                              }
-                              className="flex gap-2"
-                            >
-                              <input
-                                value={
-                                  item
-                                }
-                                onChange={(
-                                  event
-                                ) =>
-                                  updateActionItem(
-                                    index,
-                                    event.target.value
-                                  )
-                                }
-                                className="vtn-input flex-1 p-3 text-xs"
-                              />
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeActionItem(
-                                    index
-                                  )
-                                }
-                                className="vtn-secondary px-3"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          )
+                        {notionPageUrl && (
+                          <a
+                            href={
+                              notionPageUrl
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="vtn-secondary mt-2 block px-5 py-3 text-center text-xs"
+                          >
+                            Open in Notion ↗
+                          </a>
                         )}
+
                       </div>
+
                     </div>
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={
-                        saveToNotion
-                      }
-                      disabled={
-                        processingStep ===
-                          "saving" ||
-                        notionSaved ||
-                        !savedDataSourceId
-                      }
-                      className="vtn-primary w-full py-3"
-                    >
-                      {processingStep ===
-                      "saving"
-                        ? "Syncing..."
-                        : notionSaved
-                          ? "Synced ✓"
-                          : "Send to Notion"}
-                    </button>
+                </div>
 
-                    {notionPageUrl && (
-                      <a
-                        href={
-                          notionPageUrl
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="vtn-secondary block px-5 py-3 text-center text-xs"
-                      >
-                        Open in Notion ↗
-                      </a>
-                    )}
-                  </div>
-                )}
               </div>
+
             </section>
+
           </div>
 
-          <section className="vtn-card mt-6 p-6">
+          {/* =============================================
+              MOBILE RECENT CAPTURES
+          ============================================== */}
+
+          <section className="vtn-card mt-5 p-4 sm:p-6">
+
             <div className="relative z-10">
-              <div className="mb-5 flex justify-between">
+
+              <div className="mb-4 flex items-end justify-between gap-3">
+
                 <div>
-                  <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">
+
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.17em] text-[var(--muted)]">
                     Memory Vault
                   </span>
 
-                  <h2 className="mt-2 text-xl font-semibold">
+                  <h2 className="mt-1 text-lg font-semibold md:text-xl">
                     Recent Captures
                   </h2>
+
                 </div>
 
-                {history.length > 0 && (
+                {history.length >
+                  0 && (
                   <button
+                    type="button"
                     onClick={() =>
-                      setHistory([])
+                      setHistory(
+                        []
+                      )
                     }
-                    className="vtn-secondary px-3 py-2 text-xs"
+                    className="text-[10px] text-[var(--muted)] transition hover:text-[var(--foreground)]"
                   >
-                    Clear history
+                    Clear
                   </button>
                 )}
+
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {history.map(
-                  (item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() =>
-                        loadHistoryItem(
-                          item
-                        )
-                      }
-                      className="rounded-2xl border border-[var(--border)] p-4 text-left"
-                    >
-                      <p className="font-semibold">
-                        {item.note.title}
-                      </p>
+              {history.length ===
+              0 ? (
+                <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center">
 
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="vtn-badge">
-                          {item.note.category}
-                        </span>
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10 text-violet-400">
+                    ✦
+                  </div>
 
-                        <span className="vtn-badge">
-                          {item.note.priority ??
-                            "Low"}
-                        </span>
-
-                        {item.savedToNotion && (
-                          <span className="vtn-success rounded-full px-2 py-1 text-[10px]">
-                            Synced
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="mt-3 line-clamp-2 text-xs text-[var(--muted)]">
-                        {item.note.summary}
-                      </p>
-                    </button>
-                  )
-                )}
-
-                {history.length === 0 && (
-                  <p className="text-sm text-[var(--muted)]">
-                    No captures yet.
+                  <p className="mt-3 text-xs font-semibold">
+                    Your captures will appear here
                   </p>
-                )}
-              </div>
+
+                  <p className="mt-1 text-[10px] text-[var(--muted)]">
+                    Your last 10 are stored locally.
+                  </p>
+
+                </div>
+              ) : (
+                <div className="vtn-mobile-history-row md:grid md:grid-cols-2 xl:grid-cols-3">
+
+                  {history.map(
+                    (
+                      item
+                    ) => (
+                      <button
+                        key={
+                          item.id
+                        }
+                        type="button"
+                        onClick={() =>
+                          loadHistoryItem(
+                            item
+                          )
+                        }
+                        className="vtn-mobile-history-card rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 text-left transition hover:border-violet-500/30"
+                      >
+
+                        <div className="flex items-start justify-between gap-3">
+
+                          <p className="line-clamp-2 text-sm font-semibold">
+                            {item.note.title}
+                          </p>
+
+                          {item.savedToNotion && (
+                            <span className="vtn-success shrink-0 rounded-full px-2 py-1 text-[8px] font-semibold">
+                              ✓
+                            </span>
+                          )}
+
+                        </div>
+
+                        <p className="mt-2 line-clamp-2 text-[10px] leading-5 text-[var(--muted)]">
+                          {item.note.summary}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+
+                          <span className="vtn-badge text-[8px]">
+                            {item.note.category}
+                          </span>
+
+                          <span
+                            className={`vtn-priority-pill priority-${(
+                              item.note.priority ??
+                              "Low"
+                            ).toLowerCase()}`}
+                          >
+                            {item.note.priority ??
+                              "Low"}
+                          </span>
+
+                        </div>
+
+                      </button>
+                    )
+                  )}
+
+                </div>
+              )}
+
             </div>
+
           </section>
+
         </div>
+
+        {/* ===============================================
+            MOBILE STICKY ACTION
+        ================================================ */}
+
+        {note && (
+          <div className="vtn-mobile-bottom-action md:hidden">
+
+            <div className="vtn-mobile-bottom-inner">
+
+              <div className="min-w-0">
+
+                <span className="text-[8px] font-semibold uppercase tracking-[0.13em] text-[var(--muted)]">
+                  Ready to sync
+                </span>
+
+                <p className="truncate text-xs font-semibold">
+                  {note.title}
+                </p>
+
+              </div>
+
+              {notionPageUrl ? (
+                <a
+                  href={
+                    notionPageUrl
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="vtn-success flex min-h-12 shrink-0 items-center rounded-xl px-4 text-xs font-semibold"
+                >
+                  Open ↗
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={
+                    saveToNotion
+                  }
+                  disabled={
+                    processingStep ===
+                      "saving" ||
+                    notionSaved ||
+                    !savedDataSourceId
+                  }
+                  className="vtn-primary min-h-12 shrink-0 px-5 text-xs"
+                >
+                  {processingStep ===
+                  "saving"
+                    ? "Syncing..."
+                    : notionSaved
+                      ? "Synced ✓"
+                      : "Send →"}
+                </button>
+              )}
+
+            </div>
+
+          </div>
+        )}
+
       </main>
     </AuthGate>
   );

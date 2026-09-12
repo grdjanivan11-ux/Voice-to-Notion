@@ -1339,7 +1339,6 @@ textarea.vtn-input {
   position: absolute;
 
   top: 0;
-
   bottom: 0;
 
   left: -40%;
@@ -1442,9 +1441,7 @@ textarea.vtn-input {
   position: absolute;
 
   left: 0;
-
   right: 0;
-
   bottom: 0;
 
   height: 2px;
@@ -1514,7 +1511,6 @@ textarea.vtn-input {
   display: flex;
 
   width: 52px;
-
   height: 52px;
 
   align-items: center;
@@ -1555,5 +1551,715 @@ textarea.vtn-input {
   50% {
     transform:
       translateY(-5px);
+  }
+}
+
+/* =========================================================
+   C8.3.5 — PREMIUM MOBILE EXPERIENCE
+   ========================================================= */
+
+/* =========================================================
+   MOBILE HUD
+   ========================================================= */
+
+.vtn-mobile-hud {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.vtn-mobile-logout {
+  display: flex;
+
+  width: 40px;
+  height: 40px;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+
+  font-size: 14px;
+}
+
+/* =========================================================
+   MOBILE HERO
+   ========================================================= */
+
+.vtn-mobile-hero {
+  position: relative;
+
+  z-index: 1;
+
+  padding:
+    10px 16px 4px;
+}
+
+/* =========================================================
+   MOBILE VOICE CORE
+   ========================================================= */
+
+.vtn-mobile-voice-card {
+  position: relative;
+}
+
+.vtn-mobile-voice-card::after {
+  content: "";
+
+  position: absolute;
+
+  top: 30%;
+  left: 50%;
+
+  width: 190px;
+  height: 190px;
+
+  transform:
+    translate(-50%, -50%);
+
+  border-radius:
+    999px;
+
+  pointer-events:
+    none;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(139, 92, 246, 0.12),
+      transparent 68%
+    );
+
+  filter:
+    blur(16px);
+
+  opacity:
+    0.9;
+}
+
+.vtn-mobile-record-orb {
+  width:
+    126px;
+
+  height:
+    126px;
+}
+
+.vtn-mobile-record-core {
+  width:
+    76px;
+
+  height:
+    76px;
+
+  box-shadow:
+    0 0 28px
+    rgba(139, 92, 246, 0.35),
+    0 0 72px
+    rgba(59, 130, 246, 0.12);
+}
+
+/* =========================================================
+   MOBILE DESTINATION
+   ========================================================= */
+
+.vtn-mobile-destination {
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+/* =========================================================
+   MOBILE WORKSPACE TABS
+   ========================================================= */
+
+.vtn-mobile-tabs {
+  display:
+    grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap:
+    5px;
+
+  padding:
+    5px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius:
+    16px;
+
+  background:
+    var(--surface-soft);
+}
+
+.vtn-mobile-tabs button {
+  position:
+    relative;
+
+  min-height:
+    43px;
+
+  border:
+    0;
+
+  border-radius:
+    12px;
+
+  background:
+    transparent;
+
+  color:
+    var(--muted);
+
+  font-size:
+    11px;
+
+  font-weight:
+    700;
+
+  cursor:
+    pointer;
+
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.vtn-mobile-tabs button.is-active {
+  background:
+    var(--surface-strong);
+
+  color:
+    var(--foreground);
+
+  box-shadow:
+    0 5px 18px
+    rgba(0, 0, 0, 0.08);
+}
+
+.vtn-mobile-tab-dot {
+  position:
+    absolute;
+
+  top:
+    9px;
+
+  right:
+    13px;
+
+  width:
+    5px;
+
+  height:
+    5px;
+
+  border-radius:
+    999px;
+
+  background:
+    var(--success);
+
+  box-shadow:
+    0 0 10px
+    var(--success);
+}
+
+/* =========================================================
+   MOBILE TRANSCRIPT
+   ========================================================= */
+
+.vtn-mobile-transcript {
+  transition:
+    min-height 180ms ease,
+    border-color 160ms ease;
+}
+
+/* =========================================================
+   MOBILE SMART METADATA
+   ========================================================= */
+
+.vtn-mobile-metadata-grid {
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+}
+
+/* =========================================================
+   PRIORITY PILLS
+   ========================================================= */
+
+.vtn-priority-pill {
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  min-height:
+    22px;
+
+  padding:
+    3px 8px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius:
+    999px;
+
+  font-size:
+    8px;
+
+  font-weight:
+    800;
+
+  letter-spacing:
+    0.04em;
+
+  text-transform:
+    uppercase;
+}
+
+.vtn-priority-pill.priority-high {
+  border-color:
+    rgba(251, 113, 133, 0.28);
+
+  background:
+    rgba(251, 113, 133, 0.1);
+
+  color:
+    #fb7185;
+}
+
+.vtn-priority-pill.priority-medium {
+  border-color:
+    rgba(251, 191, 36, 0.28);
+
+  background:
+    rgba(251, 191, 36, 0.09);
+
+  color:
+    #fbbf24;
+}
+
+.vtn-priority-pill.priority-low {
+  border-color:
+    rgba(52, 211, 153, 0.24);
+
+  background:
+    rgba(52, 211, 153, 0.08);
+
+  color:
+    var(--success);
+}
+
+/* =========================================================
+   MOBILE HISTORY
+   ========================================================= */
+
+.vtn-mobile-history-row {
+  display:
+    flex;
+
+  gap:
+    11px;
+
+  overflow-x:
+    auto;
+
+  padding-bottom:
+    7px;
+
+  scroll-snap-type:
+    x mandatory;
+}
+
+.vtn-mobile-history-row::-webkit-scrollbar {
+  width:
+    0;
+
+  height:
+    0;
+
+  display:
+    none;
+}
+
+.vtn-mobile-history-card {
+  flex:
+    0 0 82%;
+
+  min-width:
+    0;
+
+  scroll-snap-align:
+    start;
+}
+
+/* =========================================================
+   MOBILE STICKY SAVE ACTION
+   ========================================================= */
+
+.vtn-mobile-bottom-action {
+  position:
+    fixed;
+
+  right:
+    0;
+
+  bottom:
+    0;
+
+  left:
+    0;
+
+  z-index:
+    70;
+
+  padding:
+    10px
+    14px
+    calc(
+      10px +
+      env(
+        safe-area-inset-bottom
+      )
+    );
+
+  pointer-events:
+    none;
+
+  background:
+    linear-gradient(
+      180deg,
+      transparent,
+      var(--background) 28%
+    );
+}
+
+.vtn-mobile-bottom-inner {
+  display:
+    flex;
+
+  width:
+    min(
+      100%,
+      520px
+    );
+
+  margin:
+    0 auto;
+
+  align-items:
+    center;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  padding:
+    10px;
+
+  border:
+    1px solid
+    var(--border);
+
+  border-radius:
+    18px;
+
+  background:
+    var(--surface-strong);
+
+  box-shadow:
+    0 20px 55px
+    rgba(0, 0, 0, 0.28);
+
+  pointer-events:
+    auto;
+}
+
+/* =========================================================
+   SAFE AREA SUPPORT
+   ========================================================= */
+
+@supports (
+  padding:
+    env(
+      safe-area-inset-bottom
+    )
+) {
+  .vtn-mobile-shell {
+    padding-bottom:
+      env(
+        safe-area-inset-bottom
+      );
+  }
+}
+
+/* =========================================================
+   MOBILE BREAKPOINT
+   ========================================================= */
+
+@media (
+  max-width: 767px
+) {
+  html,
+  body {
+    overflow-x:
+      hidden;
+  }
+
+  body {
+    background:
+      radial-gradient(
+        circle at 50% -5%,
+        rgba(124, 58, 237, 0.2),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 105% 25%,
+        var(--orb-cyan),
+        transparent 28%
+      ),
+      linear-gradient(
+        180deg,
+        var(--background-secondary),
+        var(--background)
+      );
+  }
+
+  body::before {
+    background-size:
+      38px 38px;
+
+    opacity:
+      0.45;
+  }
+
+  .vtn-container {
+    width:
+      calc(
+        100% -
+        24px
+      );
+  }
+
+  .vtn-card {
+    border-radius:
+      20px;
+
+    box-shadow:
+      0 18px 55px
+      rgba(0, 0, 0, 0.18);
+  }
+
+  [data-theme="light"]
+  .vtn-card {
+    box-shadow:
+      0 16px 40px
+      rgba(50, 55, 90, 0.08);
+  }
+
+  .vtn-orb-purple {
+    width:
+      280px;
+
+    height:
+      280px;
+
+    top:
+      -110px;
+
+    left:
+      -120px;
+
+    filter:
+      blur(90px);
+  }
+
+  .vtn-orb-cyan {
+    width:
+      240px;
+
+    height:
+      240px;
+
+    top:
+      280px;
+
+    right:
+      -140px;
+
+    filter:
+      blur(90px);
+  }
+
+  .vtn-mobile-hud {
+    margin-left:
+      -2px;
+
+    margin-right:
+      -2px;
+  }
+
+  .vtn-mobile-voice-card {
+    border-color:
+      rgba(139, 92, 246, 0.16);
+  }
+
+  .vtn-mobile-voice-card.vtn-recording {
+    border-color:
+      rgba(251, 113, 133, 0.28);
+
+    box-shadow:
+      0 18px 55px
+      rgba(0, 0, 0, 0.18),
+      0 0 45px
+      rgba(251, 113, 133, 0.08);
+  }
+
+  .vtn-mobile-record-orb {
+    width:
+      136px;
+
+    height:
+      136px;
+  }
+
+  .vtn-mobile-record-core {
+    width:
+      80px;
+
+    height:
+      80px;
+  }
+
+  .vtn-waveform {
+    min-height:
+      34px;
+  }
+
+  .vtn-mobile-destination {
+    padding:
+      15px;
+  }
+
+  .vtn-mobile-workspace {
+    min-height:
+      340px;
+
+    padding:
+      15px;
+  }
+
+  .vtn-mobile-transcript {
+    min-height:
+      190px;
+  }
+
+  .vtn-mobile-metadata-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .vtn-mobile-history-card {
+    flex-basis:
+      84%;
+  }
+
+  button,
+  select,
+  input[type="date"] {
+    touch-action:
+      manipulation;
+  }
+
+  .vtn-primary,
+  .vtn-secondary {
+    min-height:
+      44px;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (
+  max-width: 390px
+) {
+  .vtn-container {
+    width:
+      calc(
+        100% -
+        18px
+      );
+  }
+
+  .vtn-mobile-hero h1 {
+    font-size:
+      1.8rem;
+  }
+
+  .vtn-mobile-record-orb {
+    width:
+      126px;
+
+    height:
+      126px;
+  }
+
+  .vtn-mobile-record-core {
+    width:
+      74px;
+
+    height:
+      74px;
+  }
+
+  .vtn-mobile-history-card {
+    flex-basis:
+      90%;
+  }
+}
+
+/* =========================================================
+   DESKTOP RESET
+   ========================================================= */
+
+@media (
+  min-width: 768px
+) {
+  .vtn-mobile-history-row {
+    overflow:
+      visible;
+
+    padding-bottom:
+      0;
+
+    scroll-snap-type:
+      none;
+  }
+
+  .vtn-mobile-history-card {
+    flex:
+      initial;
+
+    width:
+      auto;
   }
 }
