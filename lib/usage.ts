@@ -15,13 +15,14 @@ import {
 
 /* =========================================================
    VOICE TO NOTION
-   C9.2 — PLAN-AWARE USAGE ENGINE
+   PLAN-AWARE USAGE + PADDLE BILLING
    ========================================================= */
 
 export type PlanStatus =
   | "active"
   | "trialing"
   | "past_due"
+  | "paused"
   | "canceled";
 
 export type UsageMetric =
@@ -31,87 +32,156 @@ export type UsageMetric =
   | "transcription_seconds";
 
 export type UserPlan = {
-  user_id: string;
+  user_id:
+    string;
 
-  plan: PlanName;
+  plan:
+    PlanName;
 
-  status: PlanStatus;
+  status:
+    PlanStatus;
 
-  stripe_customer_id:
-    | string
-    | null;
+  paddle_customer_id:
+    string |
+    null;
 
-  stripe_subscription_id:
-    | string
-    | null;
+  paddle_subscription_id:
+    string |
+    null;
+
+  paddle_transaction_id:
+    string |
+    null;
+
+  paddle_price_id:
+    string |
+    null;
+
+  billing_interval:
+    "month" |
+    "year" |
+    null;
+
+  current_period_start:
+    string |
+    null;
 
   current_period_end:
-    | string
-    | null;
+    string |
+    null;
 
-  created_at: string;
-  updated_at: string;
+  next_billed_at:
+    string |
+    null;
+
+  cancel_at_period_end:
+    boolean;
+
+  canceled_at:
+    string |
+    null;
+
+  created_at:
+    string;
+
+  updated_at:
+    string;
 };
 
 export type MonthlyUsage = {
-  user_id: string;
+  user_id:
+    string;
 
-  period_start: string;
+  period_start:
+    string;
 
-  ai_captures: number;
+  ai_captures:
+    number;
 
-  transcriptions: number;
+  transcriptions:
+    number;
 
-  notion_saves: number;
+  notion_saves:
+    number;
 
-  transcription_seconds: number;
+  transcription_seconds:
+    number;
 
-  created_at: string;
+  created_at:
+    string;
 
-  updated_at: string;
+  updated_at:
+    string;
 };
 
 export type UsageSummary = {
-  periodStart: string;
+  periodStart:
+    string;
 
-  periodEnd: string;
+  periodEnd:
+    string;
 
-  aiCaptures: number;
+  aiCaptures:
+    number;
 
-  transcriptions: number;
+  transcriptions:
+    number;
 
-  notionSaves: number;
+  notionSaves:
+    number;
 
-  transcriptionSeconds: number;
+  transcriptionSeconds:
+    number;
 
-  aiCaptureLimit: number;
+  aiCaptureLimit:
+    number;
 
-  aiCapturesRemaining: number;
+  aiCapturesRemaining:
+    number;
 
-  percentageUsed: number;
+  percentageUsed:
+    number;
 
-  limitReached: boolean;
+  limitReached:
+    boolean;
 };
 
 export type PlanSummary = {
-  name: PlanName;
+  name:
+    PlanName;
 
-  displayName: string;
+  displayName:
+    string;
 
-  status: PlanStatus;
+  status:
+    PlanStatus;
 
   currentPeriodEnd:
-    | string
-    | null;
+    string |
+    null;
+
+  billingInterval:
+    "month" |
+    "year" |
+    null;
+
+  nextBilledAt:
+    string |
+    null;
+
+  cancelAtPeriodEnd:
+    boolean;
 
   entitlements:
     PlanEntitlements;
 };
 
 export type UsageWithPlan = {
-  plan: PlanSummary;
+  plan:
+    PlanSummary;
 
-  usage: UsageSummary;
+  usage:
+    UsageSummary;
 };
 
 /* =========================================================
@@ -231,9 +301,16 @@ export async function getUserPlan(
           user_id,
           plan,
           status,
-          stripe_customer_id,
-          stripe_subscription_id,
+          paddle_customer_id,
+          paddle_subscription_id,
+          paddle_transaction_id,
+          paddle_price_id,
+          billing_interval,
+          current_period_start,
           current_period_end,
+          next_billed_at,
+          cancel_at_period_end,
+          canceled_at,
           created_at,
           updated_at
         `
@@ -257,12 +334,6 @@ export async function getUserPlan(
     );
   }
 
-  /*
-    Missing plan rows always fall back to Free.
-
-    We NEVER default users to Pro.
-  */
-
   if (
     !data
   ) {
@@ -280,13 +351,34 @@ export async function getUserPlan(
       status:
         "active",
 
-      stripe_customer_id:
+      paddle_customer_id:
         null,
 
-      stripe_subscription_id:
+      paddle_subscription_id:
+        null,
+
+      paddle_transaction_id:
+        null,
+
+      paddle_price_id:
+        null,
+
+      billing_interval:
+        null,
+
+      current_period_start:
         null,
 
       current_period_end:
+        null,
+
+      next_billed_at:
+        null,
+
+      cancel_at_period_end:
+        false,
+
+      canceled_at:
         null,
 
       created_at:
@@ -304,9 +396,23 @@ export async function getUserPlan(
       data.status ===
         "past_due" ||
       data.status ===
+        "paused" ||
+      data.status ===
         "canceled"
         ? data.status
         : "active";
+
+  const billingInterval:
+    "month" |
+    "year" |
+    null =
+      data.billing_interval ===
+        "year"
+        ? "year"
+        : data.billing_interval ===
+            "month"
+          ? "month"
+          : null;
 
   return {
     user_id:
@@ -319,16 +425,44 @@ export async function getUserPlan(
 
     status,
 
-    stripe_customer_id:
-      data.stripe_customer_id ??
+    paddle_customer_id:
+      data.paddle_customer_id ??
       null,
 
-    stripe_subscription_id:
-      data.stripe_subscription_id ??
+    paddle_subscription_id:
+      data.paddle_subscription_id ??
+      null,
+
+    paddle_transaction_id:
+      data.paddle_transaction_id ??
+      null,
+
+    paddle_price_id:
+      data.paddle_price_id ??
+      null,
+
+    billing_interval:
+      billingInterval,
+
+    current_period_start:
+      data.current_period_start ??
       null,
 
     current_period_end:
       data.current_period_end ??
+      null,
+
+    next_billed_at:
+      data.next_billed_at ??
+      null,
+
+    cancel_at_period_end:
+      Boolean(
+        data.cancel_at_period_end
+      ),
+
+    canceled_at:
+      data.canceled_at ??
       null,
 
     created_at:
@@ -341,11 +475,6 @@ export async function getUserPlan(
 
 /* =========================================================
    EFFECTIVE PLAN
-
-   A stored Pro plan is only treated as Pro while its
-   subscription state is active or trialing.
-
-   Stripe will control these fields in C9.3.
    ========================================================= */
 
 export function getEffectivePlan(
@@ -608,6 +737,18 @@ export async function getUsageWithPlan(
       currentPeriodEnd:
         storedPlan
           .current_period_end,
+
+      billingInterval:
+        storedPlan
+          .billing_interval,
+
+      nextBilledAt:
+        storedPlan
+          .next_billed_at,
+
+      cancelAtPeriodEnd:
+        storedPlan
+          .cancel_at_period_end,
 
       entitlements,
     },
