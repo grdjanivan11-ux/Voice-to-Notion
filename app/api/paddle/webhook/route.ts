@@ -1,7 +1,7 @@
 import {
-  createHmac,
-  timingSafeEqual,
-} from "crypto";
+  Environment,
+  Paddle,
+} from "@paddle/paddle-node-sdk";
 
 import {
   NextResponse,
@@ -13,7 +13,7 @@ import {
 
 /* =========================================================
    VOICE TO NOTION
-   PADDLE WEBHOOK
+   C9.3 — VERIFIED PADDLE WEBHOOK
    ========================================================= */
 
 type PaddleCustomData = {
@@ -22,337 +22,325 @@ type PaddleCustomData = {
   billing_interval?: string;
 };
 
-type PaddleBillingPeriod = {
-  starts_at?: string;
-  ends_at?: string;
+type BillingInterval =
+  | "month"
+  | "year"
+  | null;
+
+type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "paused"
+  | "canceled";
+
+type NormalizedTransaction = {
+  id:
+    string | null;
+
+  customerId:
+    string | null;
+
+  subscriptionId:
+    string | null;
+
+  customData:
+    PaddleCustomData | null;
+
+  priceId:
+    string | null;
+
+  billingInterval:
+    BillingInterval;
+
+  periodStart:
+    string | null;
+
+  periodEnd:
+    string | null;
 };
 
-type PaddleScheduledChange = {
-  action?:
-    | "cancel"
-    | "pause"
-    | string;
+type NormalizedSubscription = {
+  id:
+    string | null;
 
-  effective_at?: string;
+  customerId:
+    string | null;
+
+  status:
+    SubscriptionStatus;
+
+  customData:
+    PaddleCustomData | null;
+
+  priceId:
+    string | null;
+
+  billingInterval:
+    BillingInterval;
+
+  periodStart:
+    string | null;
+
+  periodEnd:
+    string | null;
+
+  nextBilledAt:
+    string | null;
+
+  cancelAtPeriodEnd:
+    boolean;
+
+  canceledAt:
+    string | null;
 };
 
-type PaddlePrice = {
-  id?: string;
+type PaddleEventLike = {
+  eventId?:
+    string;
 
-  billing_cycle?: {
-    interval?:
-      | "month"
-      | "year"
-      | "week"
-      | "day"
-      | string;
+  event_id?:
+    string;
 
-    frequency?: number;
-  };
-};
+  eventType?:
+    string;
 
-type PaddleSubscriptionItem = {
-  price?: PaddlePrice;
-};
+  event_type?:
+    string;
 
-type PaddleSubscriptionData = {
-  id?: string;
+  occurredAt?:
+    string;
 
-  status?:
-    | "active"
-    | "trialing"
-    | "past_due"
-    | "paused"
-    | "canceled"
-    | string;
-
-  customer_id?: string | null;
-
-  custom_data?:
-    | PaddleCustomData
-    | null;
-
-  current_billing_period?:
-    | PaddleBillingPeriod
-    | null;
-
-  billing_cycle?: {
-    interval?:
-      | "month"
-      | "year"
-      | "week"
-      | "day"
-      | string;
-
-    frequency?: number;
-  };
-
-  scheduled_change?:
-    | PaddleScheduledChange
-    | null;
-
-  canceled_at?:
-    | string
-    | null;
-
-  next_billed_at?:
-    | string
-    | null;
-
-  items?:
-    PaddleSubscriptionItem[];
-};
-
-type PaddleTransactionData = {
-  id?: string;
-
-  customer_id?:
-    | string
-    | null;
-
-  subscription_id?:
-    | string
-    | null;
-
-  custom_data?:
-    | PaddleCustomData
-    | null;
-
-  billing_period?:
-    | PaddleBillingPeriod
-    | null;
-
-  items?: Array<{
-    price?: PaddlePrice;
-  }>;
-};
-
-type PaddleWebhookEvent = {
-  event_id?: string;
-
-  event_type: string;
-
-  occurred_at?: string;
-
-  notification_id?: string;
+  occurred_at?:
+    string;
 
   data:
-    | PaddleSubscriptionData
-    | PaddleTransactionData;
+    unknown;
 };
 
 /* =========================================================
-   SIGNATURE
+   PADDLE
    ========================================================= */
 
-function parsePaddleSignature(
-  header:
-    string
-) {
-  const values =
-    header.split(";");
-
-  let timestamp =
-    "";
-
-  const signatures:
-    string[] =
-      [];
-
-  for (
-    const value of
-    values
-  ) {
-    const [
-      key,
-      rawValue,
-    ] =
-      value.split("=");
-
-    if (
-      key ===
-        "ts" &&
-      rawValue
-    ) {
-      timestamp =
-        rawValue;
-    }
-
-    if (
-      key ===
-        "h1" &&
-      rawValue
-    ) {
-      signatures.push(
-        rawValue
-      );
-    }
-  }
-
-  return {
-    timestamp,
-    signatures,
-  };
-}
-
-function safeCompareHex(
-  first:
-    string,
-
-  second:
-    string
-) {
-  try {
-    const firstBuffer =
-      Buffer.from(
-        first,
-        "hex"
-      );
-
-    const secondBuffer =
-      Buffer.from(
-        second,
-        "hex"
-      );
-
-    if (
-      firstBuffer.length !==
-      secondBuffer.length
-    ) {
-      return false;
-    }
-
-    return timingSafeEqual(
-      firstBuffer,
-      secondBuffer
-    );
-  } catch {
-    return false;
-  }
-}
-
-function verifyPaddleWebhook(
-  rawBody:
-    string,
-
-  signatureHeader:
-    string,
-
-  secret:
-    string
-) {
-  const {
-    timestamp,
-    signatures,
-  } =
-    parsePaddleSignature(
-      signatureHeader
-    );
+function getPaddleClient() {
+  const apiKey =
+    process.env
+      .PADDLE_API_KEY;
 
   if (
-    !timestamp ||
-    signatures.length ===
-      0
+    !apiKey
   ) {
-    return false;
-  }
-
-  const timestampNumber =
-    Number.parseInt(
-      timestamp,
-      10
+    throw new Error(
+      "PADDLE_API_KEY is missing."
     );
-
-  if (
-    !Number.isFinite(
-      timestampNumber
-    )
-  ) {
-    return false;
   }
 
-  /*
-    Paddle's SDK uses a short timestamp tolerance
-    to reduce replay-attack risk.
+  const environment =
+    process.env
+      .NEXT_PUBLIC_PADDLE_ENVIRONMENT ===
+    "production"
+      ? Environment.production
+      : Environment.sandbox;
 
-    We allow 60 seconds here because serverless
-    delivery can occasionally be a little slower.
-  */
-  const currentUnixSeconds =
-    Math.floor(
-      Date.now() /
-        1000
-    );
-
-  if (
-    Math.abs(
-      currentUnixSeconds -
-        timestampNumber
-    ) >
-    60
-  ) {
-    return false;
-  }
-
-  const signedPayload =
-    `${timestamp}:${rawBody}`;
-
-  const expectedSignature =
-    createHmac(
-      "sha256",
-      secret
-    )
-      .update(
-        signedPayload
-      )
-      .digest(
-        "hex"
-      );
-
-  return signatures.some(
-    (
-      signature
-    ) =>
-      safeCompareHex(
-        expectedSignature,
-        signature
-      )
+  return new Paddle(
+    apiKey,
+    {
+      environment,
+    }
   );
 }
 
 /* =========================================================
-   HELPERS
+   GENERIC OBJECT HELPERS
+   ========================================================= */
+
+function asRecord(
+  value:
+    unknown
+):
+  Record<
+    string,
+    unknown
+  > {
+  if (
+    value &&
+    typeof value ===
+      "object" &&
+    !Array.isArray(
+      value
+    )
+  ) {
+    return value as Record<
+      string,
+      unknown
+    >;
+  }
+
+  return {};
+}
+
+function asString(
+  value:
+    unknown
+) {
+  return typeof value ===
+    "string"
+    ? value
+    : null;
+}
+
+function getEither(
+  record:
+    Record<
+      string,
+      unknown
+    >,
+
+  camelKey:
+    string,
+
+  snakeKey:
+    string
+) {
+  if (
+    camelKey in
+    record
+  ) {
+    return record[
+      camelKey
+    ];
+  }
+
+  return record[
+    snakeKey
+  ];
+}
+
+function getStringEither(
+  record:
+    Record<
+      string,
+      unknown
+    >,
+
+  camelKey:
+    string,
+
+  snakeKey:
+    string
+) {
+  return asString(
+    getEither(
+      record,
+      camelKey,
+      snakeKey
+    )
+  );
+}
+
+/* =========================================================
+   EVENT HELPERS
+   ========================================================= */
+
+function getEventId(
+  event:
+    PaddleEventLike
+) {
+  return (
+    event.eventId ??
+    event.event_id ??
+    null
+  );
+}
+
+function getEventType(
+  event:
+    PaddleEventLike
+) {
+  return (
+    event.eventType ??
+    event.event_type ??
+    ""
+  );
+}
+
+function getOccurredAt(
+  event:
+    PaddleEventLike
+) {
+  return (
+    event.occurredAt ??
+    event.occurred_at ??
+    new Date()
+      .toISOString()
+  );
+}
+
+/* =========================================================
+   CUSTOM DATA
    ========================================================= */
 
 function getCustomData(
-  data:
-    PaddleSubscriptionData |
-    PaddleTransactionData
+  value:
+    unknown
 ): PaddleCustomData | null {
-  const customData =
-    data.custom_data;
+  const record =
+    asRecord(
+      value
+    );
+
+  const raw =
+    getEither(
+      record,
+      "customData",
+      "custom_data"
+    );
 
   if (
-    !customData ||
-    typeof customData !==
-      "object"
+    !raw ||
+    typeof raw !==
+      "object" ||
+    Array.isArray(
+      raw
+    )
   ) {
     return null;
   }
 
-  return customData;
+  const custom =
+    raw as Record<
+      string,
+      unknown
+    >;
+
+  return {
+    supabase_user_id:
+      asString(
+        custom
+          .supabase_user_id
+      ) ??
+      undefined,
+
+    plan:
+      asString(
+        custom.plan
+      ) ??
+      undefined,
+
+    billing_interval:
+      asString(
+        custom
+          .billing_interval
+      ) ??
+      undefined,
+  };
 }
 
-function getUserIdFromData(
-  data:
-    PaddleSubscriptionData |
-    PaddleTransactionData
+function getSupabaseUserId(
+  customData:
+    PaddleCustomData |
+    null
 ) {
-  const customData =
-    getCustomData(
-      data
-    );
-
   const userId =
     customData
       ?.supabase_user_id;
@@ -368,12 +356,15 @@ function getUserIdFromData(
   return userId;
 }
 
-function normalizeBillingInterval(
+/* =========================================================
+   BILLING HELPERS
+   ========================================================= */
+
+function normalizeInterval(
   value:
-    string |
-    null |
-    undefined
-) {
+    unknown
+):
+  BillingInterval {
   if (
     value ===
     "year"
@@ -391,54 +382,12 @@ function normalizeBillingInterval(
   return null;
 }
 
-function getPriceIdFromItems(
-  items:
-    PaddleSubscriptionItem[] |
-    PaddleTransactionData["items"] |
-    undefined
-) {
-  if (
-    !items ||
-    items.length ===
-      0
-  ) {
-    return null;
-  }
-
-  return (
-    items[0]
-      ?.price
-      ?.id ??
-    null
-  );
-}
-
-function isScheduledToCancel(
-  subscription:
-    PaddleSubscriptionData
-) {
-  return (
-    subscription
-      .scheduled_change
-      ?.action ===
-    "cancel"
-  );
-}
-
-function isKnownSubscriptionStatus(
+function normalizeStatus(
   value:
-    string |
-    undefined
+    unknown
 ):
-  value is
-    | "active"
-    | "trialing"
-    | "past_due"
-    | "paused"
-    | "canceled" {
-  return (
-    value ===
-      "active" ||
+  SubscriptionStatus {
+  if (
     value ===
       "trialing" ||
     value ===
@@ -447,7 +396,320 @@ function isKnownSubscriptionStatus(
       "paused" ||
     value ===
       "canceled"
+  ) {
+    return value;
+  }
+
+  return "active";
+}
+
+function getFirstItem(
+  data:
+    Record<
+      string,
+      unknown
+    >
+) {
+  const items =
+    data.items;
+
+  if (
+    !Array.isArray(
+      items
+    ) ||
+    items.length ===
+      0
+  ) {
+    return {};
+  }
+
+  return asRecord(
+    items[0]
   );
+}
+
+function getPriceRecord(
+  data:
+    Record<
+      string,
+      unknown
+    >
+) {
+  const item =
+    getFirstItem(
+      data
+    );
+
+  return asRecord(
+    item.price
+  );
+}
+
+function getPriceId(
+  data:
+    Record<
+      string,
+      unknown
+    >
+) {
+  const price =
+    getPriceRecord(
+      data
+    );
+
+  return asString(
+    price.id
+  );
+}
+
+function getIntervalFromPrice(
+  data:
+    Record<
+      string,
+      unknown
+    >
+) {
+  const price =
+    getPriceRecord(
+      data
+    );
+
+  const billingCycle =
+    asRecord(
+      getEither(
+        price,
+        "billingCycle",
+        "billing_cycle"
+      )
+    );
+
+  return normalizeInterval(
+    billingCycle
+      .interval
+  );
+}
+
+function getBillingCycleInterval(
+  data:
+    Record<
+      string,
+      unknown
+    >
+) {
+  const billingCycle =
+    asRecord(
+      getEither(
+        data,
+        "billingCycle",
+        "billing_cycle"
+      )
+    );
+
+  return normalizeInterval(
+    billingCycle
+      .interval
+  );
+}
+
+function getPeriod(
+  data:
+    Record<
+      string,
+      unknown
+    >,
+
+  camelKey:
+    string,
+
+  snakeKey:
+    string
+) {
+  const period =
+    asRecord(
+      getEither(
+        data,
+        camelKey,
+        snakeKey
+      )
+    );
+
+  return {
+    start:
+      getStringEither(
+        period,
+        "startsAt",
+        "starts_at"
+      ),
+
+    end:
+      getStringEither(
+        period,
+        "endsAt",
+        "ends_at"
+      ),
+  };
+}
+
+/* =========================================================
+   NORMALIZE TRANSACTION
+   ========================================================= */
+
+function normalizeTransaction(
+  rawData:
+    unknown
+):
+  NormalizedTransaction {
+  const data =
+    asRecord(
+      rawData
+    );
+
+  const period =
+    getPeriod(
+      data,
+      "billingPeriod",
+      "billing_period"
+    );
+
+  return {
+    id:
+      asString(
+        data.id
+      ),
+
+    customerId:
+      getStringEither(
+        data,
+        "customerId",
+        "customer_id"
+      ),
+
+    subscriptionId:
+      getStringEither(
+        data,
+        "subscriptionId",
+        "subscription_id"
+      ),
+
+    customData:
+      getCustomData(
+        data
+      ),
+
+    priceId:
+      getPriceId(
+        data
+      ),
+
+    billingInterval:
+      getIntervalFromPrice(
+        data
+      ),
+
+    periodStart:
+      period.start,
+
+    periodEnd:
+      period.end,
+  };
+}
+
+/* =========================================================
+   NORMALIZE SUBSCRIPTION
+   ========================================================= */
+
+function normalizeSubscription(
+  rawData:
+    unknown
+):
+  NormalizedSubscription {
+  const data =
+    asRecord(
+      rawData
+    );
+
+  const period =
+    getPeriod(
+      data,
+      "currentBillingPeriod",
+      "current_billing_period"
+    );
+
+  const scheduledChange =
+    asRecord(
+      getEither(
+        data,
+        "scheduledChange",
+        "scheduled_change"
+      )
+    );
+
+  const scheduledAction =
+    asString(
+      scheduledChange
+        .action
+    );
+
+  return {
+    id:
+      asString(
+        data.id
+      ),
+
+    customerId:
+      getStringEither(
+        data,
+        "customerId",
+        "customer_id"
+      ),
+
+    status:
+      normalizeStatus(
+        data.status
+      ),
+
+    customData:
+      getCustomData(
+        data
+      ),
+
+    priceId:
+      getPriceId(
+        data
+      ),
+
+    billingInterval:
+      getBillingCycleInterval(
+        data
+      ) ??
+      getIntervalFromPrice(
+        data
+      ),
+
+    periodStart:
+      period.start,
+
+    periodEnd:
+      period.end,
+
+    nextBilledAt:
+      getStringEither(
+        data,
+        "nextBilledAt",
+        "next_billed_at"
+      ),
+
+    cancelAtPeriodEnd:
+      scheduledAction ===
+      "cancel",
+
+    canceledAt:
+      getStringEither(
+        data,
+        "canceledAt",
+        "canceled_at"
+      ),
+  };
 }
 
 /* =========================================================
@@ -499,14 +761,21 @@ async function eventAlreadyProcessed(
 
 async function handleTransactionCompleted(
   event:
-    PaddleWebhookEvent
+    PaddleEventLike
 ) {
+  const eventId =
+    getEventId(
+      event
+    );
+
   const transaction =
-    event.data as PaddleTransactionData;
+    normalizeTransaction(
+      event.data
+    );
 
   const userId =
-    getUserIdFromData(
-      transaction
+    getSupabaseUserId(
+      transaction.customData
     );
 
   if (
@@ -515,9 +784,7 @@ async function handleTransactionCompleted(
     console.warn(
       "PADDLE TRANSACTION WITHOUT SUPABASE USER:",
       {
-        eventId:
-          event.event_id,
-
+        eventId,
         transactionId:
           transaction.id,
       }
@@ -526,33 +793,8 @@ async function handleTransactionCompleted(
     return;
   }
 
-  const priceId =
-    getPriceIdFromItems(
-      transaction.items
-    );
-
-  const interval =
-    normalizeBillingInterval(
-      transaction.items?.[
-        0
-      ]?.price
-        ?.billing_cycle
-        ?.interval
-    );
-
-  const periodStart =
-    transaction
-      .billing_period
-      ?.starts_at ??
-    null;
-
-  const periodEnd =
-    transaction
-      .billing_period
-      ?.ends_at ??
-    null;
-
   const {
+    data,
     error,
   } =
     await supabaseAdmin
@@ -567,28 +809,25 @@ async function handleTransactionCompleted(
           "active",
 
         paddle_customer_id:
-          transaction.customer_id ??
-          null,
+          transaction.customerId,
 
         paddle_subscription_id:
-          transaction.subscription_id ??
-          null,
+          transaction.subscriptionId,
 
         paddle_transaction_id:
-          transaction.id ??
-          null,
+          transaction.id,
 
         paddle_price_id:
-          priceId,
+          transaction.priceId,
 
         billing_interval:
-          interval,
+          transaction.billingInterval,
 
         current_period_start:
-          periodStart,
+          transaction.periodStart,
 
         current_period_end:
-          periodEnd,
+          transaction.periodEnd,
 
         cancel_at_period_end:
           false,
@@ -597,17 +836,19 @@ async function handleTransactionCompleted(
           null,
 
         paddle_last_event_id:
-          event.event_id ??
-          null,
+          eventId,
 
         paddle_last_event_at:
-          event.occurred_at ??
-          new Date()
-            .toISOString(),
+          getOccurredAt(
+            event
+          ),
       })
       .eq(
         "user_id",
         userId
+      )
+      .select(
+        "user_id"
       );
 
   if (
@@ -622,6 +863,88 @@ async function handleTransactionCompleted(
       "Could not activate Pro."
     );
   }
+
+  if (
+    !data ||
+    data.length ===
+      0
+  ) {
+    throw new Error(
+      "No user_plans row exists for this Paddle customer."
+    );
+  }
+
+  console.log(
+    "PADDLE PRO ACTIVATED:",
+    {
+      userId,
+      transactionId:
+        transaction.id,
+      subscriptionId:
+        transaction.subscriptionId,
+    }
+  );
+}
+
+/* =========================================================
+   SUBSCRIPTION USER LOOKUP
+   ========================================================= */
+
+async function resolveSubscriptionUserId(
+  subscription:
+    NormalizedSubscription
+) {
+  const customUserId =
+    getSupabaseUserId(
+      subscription.customData
+    );
+
+  if (
+    customUserId
+  ) {
+    return customUserId;
+  }
+
+  if (
+    !subscription.id
+  ) {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabaseAdmin
+      .from(
+        "user_plans"
+      )
+      .select(
+        "user_id"
+      )
+      .eq(
+        "paddle_subscription_id",
+        subscription.id
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    console.error(
+      "PADDLE SUBSCRIPTION USER LOOKUP ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Could not resolve subscription owner."
+    );
+  }
+
+  return (
+    data?.user_id ??
+    null
+  );
 }
 
 /* =========================================================
@@ -630,127 +953,52 @@ async function handleTransactionCompleted(
 
 async function handleSubscriptionEvent(
   event:
-    PaddleWebhookEvent
+    PaddleEventLike
 ) {
+  const eventId =
+    getEventId(
+      event
+    );
+
   const subscription =
-    event.data as PaddleSubscriptionData;
+    normalizeSubscription(
+      event.data
+    );
 
   const userId =
-    getUserIdFromData(
+    await resolveSubscriptionUserId(
       subscription
     );
 
-  /*
-    Most subscriptions created from our checkout should
-    contain custom_data.
-
-    If a later Paddle event somehow doesn't, we fall back
-    to the stored subscription ID.
-  */
-
-  let targetUserId =
-    userId;
-
   if (
-    !targetUserId &&
-    subscription.id
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from(
-          "user_plans"
-        )
-        .select(
-          "user_id"
-        )
-        .eq(
-          "paddle_subscription_id",
-          subscription.id
-        )
-        .maybeSingle();
-
-    if (
-      error
-    ) {
-      console.error(
-        "PADDLE SUBSCRIPTION USER LOOKUP ERROR:",
-        error
-      );
-
-      throw new Error(
-        "Could not resolve Paddle subscription owner."
-      );
-    }
-
-    targetUserId =
-      data
-        ?.user_id ??
-      null;
-  }
-
-  if (
-    !targetUserId
+    !userId
   ) {
     console.warn(
       "PADDLE SUBSCRIPTION WITHOUT USER:",
       {
-        eventId:
-          event.event_id,
-
+        eventId,
+        eventType:
+          getEventType(
+            event
+          ),
         subscriptionId:
           subscription.id,
-
-        eventType:
-          event.event_type,
       }
     );
 
     return;
   }
 
-  const status =
-    isKnownSubscriptionStatus(
-      subscription.status
-    )
-      ? subscription.status
-      : "active";
-
   const effectivePlan =
-    status ===
+    subscription.status ===
       "active" ||
-    status ===
+    subscription.status ===
       "trialing"
       ? "pro"
       : "free";
 
-  const priceId =
-    getPriceIdFromItems(
-      subscription.items
-    );
-
-  const interval =
-    normalizeBillingInterval(
-      subscription
-        .billing_cycle
-        ?.interval
-    );
-
-  const periodStart =
-    subscription
-      .current_billing_period
-      ?.starts_at ??
-    null;
-
-  const periodEnd =
-    subscription
-      .current_billing_period
-      ?.ends_at ??
-    null;
-
   const {
+    data,
     error,
   } =
     await supabaseAdmin
@@ -761,53 +1009,50 @@ async function handleSubscriptionEvent(
         plan:
           effectivePlan,
 
-        status,
+        status:
+          subscription.status,
 
         paddle_customer_id:
-          subscription.customer_id ??
-          null,
+          subscription.customerId,
 
         paddle_subscription_id:
-          subscription.id ??
-          null,
+          subscription.id,
 
         paddle_price_id:
-          priceId,
+          subscription.priceId,
 
         billing_interval:
-          interval,
+          subscription.billingInterval,
 
         current_period_start:
-          periodStart,
+          subscription.periodStart,
 
         current_period_end:
-          periodEnd,
+          subscription.periodEnd,
 
         next_billed_at:
-          subscription.next_billed_at ??
-          null,
+          subscription.nextBilledAt,
 
         cancel_at_period_end:
-          isScheduledToCancel(
-            subscription
-          ),
+          subscription.cancelAtPeriodEnd,
 
         canceled_at:
-          subscription.canceled_at ??
-          null,
+          subscription.canceledAt,
 
         paddle_last_event_id:
-          event.event_id ??
-          null,
+          eventId,
 
         paddle_last_event_at:
-          event.occurred_at ??
-          new Date()
-            .toISOString(),
+          getOccurredAt(
+            event
+          ),
       })
       .eq(
         "user_id",
-        targetUserId
+        userId
+      )
+      .select(
+        "user_id"
       );
 
   if (
@@ -822,10 +1067,31 @@ async function handleSubscriptionEvent(
       "Could not synchronize Paddle subscription."
     );
   }
+
+  if (
+    !data ||
+    data.length ===
+      0
+  ) {
+    throw new Error(
+      "No user_plans row exists for this subscription."
+    );
+  }
+
+  console.log(
+    "PADDLE SUBSCRIPTION SYNCED:",
+    {
+      userId,
+      status:
+        subscription.status,
+      subscriptionId:
+        subscription.id,
+    }
+  );
 }
 
 /* =========================================================
-   POST
+   WEBHOOK
    ========================================================= */
 
 export async function POST(
@@ -850,7 +1116,7 @@ export async function POST(
             false,
 
           error:
-            "Webhook is not configured.",
+            "Webhook secret is not configured.",
         },
         {
           status:
@@ -884,27 +1150,33 @@ export async function POST(
 
     /*
       IMPORTANT:
-      Paddle signature verification requires the exact
-      raw body string.
+      Paddle requires the exact raw request body.
 
-      Do not call request.json() before verification.
+      Do not call request.json() before unmarshal().
     */
 
     const rawBody =
       await request.text();
 
-    const valid =
-      verifyPaddleWebhook(
-        rawBody,
-        signature,
-        webhookSecret
-      );
+    const paddle =
+      getPaddleClient();
 
-    if (
-      !valid
+    let verifiedEvent:
+      unknown;
+
+    try {
+      verifiedEvent =
+        await paddle.webhooks.unmarshal(
+          rawBody,
+          webhookSecret,
+          signature
+        );
+    } catch (
+      verificationError
     ) {
-      console.warn(
-        "INVALID PADDLE WEBHOOK SIGNATURE"
+      console.error(
+        "PADDLE SIGNATURE VERIFICATION ERROR:",
+        verificationError
       );
 
       return NextResponse.json(
@@ -913,7 +1185,7 @@ export async function POST(
             false,
 
           error:
-            "Invalid signature.",
+            "Invalid Paddle signature.",
         },
         {
           status:
@@ -923,14 +1195,30 @@ export async function POST(
     }
 
     const event =
-      JSON.parse(
-        rawBody
-      ) as PaddleWebhookEvent;
+      verifiedEvent as PaddleEventLike;
+
+    const eventId =
+      getEventId(
+        event
+      );
+
+    const eventType =
+      getEventType(
+        event
+      );
 
     if (
-      event.event_id &&
+      !eventType
+    ) {
+      throw new Error(
+        "Paddle event type is missing."
+      );
+    }
+
+    if (
+      eventId &&
       await eventAlreadyProcessed(
-        event.event_id
+        eventId
       )
     ) {
       return NextResponse.json({
@@ -943,7 +1231,7 @@ export async function POST(
     }
 
     switch (
-      event.event_type
+      eventType
     ) {
       case "transaction.completed": {
         await handleTransactionCompleted(
@@ -970,7 +1258,7 @@ export async function POST(
       default: {
         console.log(
           "IGNORED PADDLE EVENT:",
-          event.event_type
+          eventType
         );
       }
     }
