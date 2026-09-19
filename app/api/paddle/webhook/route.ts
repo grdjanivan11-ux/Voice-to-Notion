@@ -118,6 +118,21 @@ type PaddleEventLike = {
     unknown;
 };
 
+type SupabaseErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+};
+
+type SupabaseOperationResult<T> = {
+  data:
+    T;
+
+  error:
+    SupabaseErrorLike | null;
+};
+
 /* =========================================================
    PADDLE
    ========================================================= */
@@ -148,6 +163,130 @@ function getPaddleClient() {
       environment,
     }
   );
+}
+
+/* =========================================================
+   SUPABASE RETRY SAFETY
+   ========================================================= */
+
+function sleep(
+  milliseconds:
+    number
+) {
+  return new Promise<void>(
+    (
+      resolve
+    ) => {
+      setTimeout(
+        resolve,
+        milliseconds
+      );
+    }
+  );
+}
+
+function isTransientSupabaseError(
+  error:
+    SupabaseErrorLike | null
+) {
+  if (
+    !error
+  ) {
+    return false;
+  }
+
+  if (
+    error.code ===
+    "PGRST303"
+  ) {
+    return true;
+  }
+
+  const message =
+    error.message
+      ?.toLowerCase() ??
+    "";
+
+  return (
+    message.includes(
+      "jwt issued at future"
+    ) ||
+    message.includes(
+      "jwt issued in the future"
+    )
+  );
+}
+
+async function runSupabaseOperationWithRetry<T>(
+  label:
+    string,
+
+  operation:
+    () =>
+      Promise<
+        SupabaseOperationResult<T>
+      >
+): Promise<
+  SupabaseOperationResult<T>
+> {
+  const retryDelays =
+    [
+      250,
+      500,
+      1000,
+    ];
+
+  let result =
+    await operation();
+
+  for (
+    let attempt =
+      0;
+
+    attempt <
+    retryDelays.length;
+
+    attempt +=
+      1
+  ) {
+    if (
+      !isTransientSupabaseError(
+        result.error
+      )
+    ) {
+      return result;
+    }
+
+    const delay =
+      retryDelays[
+        attempt
+      ];
+
+    console.warn(
+      "TRANSIENT SUPABASE ERROR — RETRYING:",
+      {
+        label,
+        attempt:
+          attempt + 1,
+        delay,
+        code:
+          result.error
+            ?.code,
+        message:
+          result.error
+            ?.message,
+      }
+    );
+
+    await sleep(
+      delay
+    );
+
+    result =
+      await operation();
+  }
+
+  return result;
 }
 
 /* =========================================================
@@ -724,18 +863,23 @@ async function eventAlreadyProcessed(
     data,
     error,
   } =
-    await supabaseAdmin
-      .from(
-        "user_plans"
-      )
-      .select(
-        "user_id"
-      )
-      .eq(
-        "paddle_last_event_id",
-        eventId
-      )
-      .maybeSingle();
+    await runSupabaseOperationWithRetry(
+      "paddle-idempotency-check",
+
+      async () =>
+        await supabaseAdmin
+          .from(
+            "user_plans"
+          )
+          .select(
+            "user_id"
+          )
+          .eq(
+            "paddle_last_event_id",
+            eventId
+          )
+          .maybeSingle()
+    );
 
   if (
     error
@@ -797,59 +941,64 @@ async function handleTransactionCompleted(
     data,
     error,
   } =
-    await supabaseAdmin
-      .from(
-        "user_plans"
-      )
-      .update({
-        plan:
-          "pro",
+    await runSupabaseOperationWithRetry(
+      "paddle-transaction-update",
 
-        status:
-          "active",
+      async () =>
+        await supabaseAdmin
+          .from(
+            "user_plans"
+          )
+          .update({
+            plan:
+              "pro",
 
-        paddle_customer_id:
-          transaction.customerId,
+            status:
+              "active",
 
-        paddle_subscription_id:
-          transaction.subscriptionId,
+            paddle_customer_id:
+              transaction.customerId,
 
-        paddle_transaction_id:
-          transaction.id,
+            paddle_subscription_id:
+              transaction.subscriptionId,
 
-        paddle_price_id:
-          transaction.priceId,
+            paddle_transaction_id:
+              transaction.id,
 
-        billing_interval:
-          transaction.billingInterval,
+            paddle_price_id:
+              transaction.priceId,
 
-        current_period_start:
-          transaction.periodStart,
+            billing_interval:
+              transaction.billingInterval,
 
-        current_period_end:
-          transaction.periodEnd,
+            current_period_start:
+              transaction.periodStart,
 
-        cancel_at_period_end:
-          false,
+            current_period_end:
+              transaction.periodEnd,
 
-        canceled_at:
-          null,
+            cancel_at_period_end:
+              false,
 
-        paddle_last_event_id:
-          eventId,
+            canceled_at:
+              null,
 
-        paddle_last_event_at:
-          getOccurredAt(
-            event
-          ),
-      })
-      .eq(
-        "user_id",
-        userId
-      )
-      .select(
-        "user_id"
-      );
+            paddle_last_event_id:
+              eventId,
+
+            paddle_last_event_at:
+              getOccurredAt(
+                event
+              ),
+          })
+          .eq(
+            "user_id",
+            userId
+          )
+          .select(
+            "user_id"
+          )
+    );
 
   if (
     error
@@ -915,18 +1064,23 @@ async function resolveSubscriptionUserId(
     data,
     error,
   } =
-    await supabaseAdmin
-      .from(
-        "user_plans"
-      )
-      .select(
-        "user_id"
-      )
-      .eq(
-        "paddle_subscription_id",
-        subscription.id
-      )
-      .maybeSingle();
+    await runSupabaseOperationWithRetry(
+      "paddle-subscription-user-lookup",
+
+      async () =>
+        await supabaseAdmin
+          .from(
+            "user_plans"
+          )
+          .select(
+            "user_id"
+          )
+          .eq(
+            "paddle_subscription_id",
+            subscription.id
+          )
+          .maybeSingle()
+    );
 
   if (
     error
@@ -1001,59 +1155,64 @@ async function handleSubscriptionEvent(
     data,
     error,
   } =
-    await supabaseAdmin
-      .from(
-        "user_plans"
-      )
-      .update({
-        plan:
-          effectivePlan,
+    await runSupabaseOperationWithRetry(
+      "paddle-subscription-update",
 
-        status:
-          subscription.status,
+      async () =>
+        await supabaseAdmin
+          .from(
+            "user_plans"
+          )
+          .update({
+            plan:
+              effectivePlan,
 
-        paddle_customer_id:
-          subscription.customerId,
+            status:
+              subscription.status,
 
-        paddle_subscription_id:
-          subscription.id,
+            paddle_customer_id:
+              subscription.customerId,
 
-        paddle_price_id:
-          subscription.priceId,
+            paddle_subscription_id:
+              subscription.id,
 
-        billing_interval:
-          subscription.billingInterval,
+            paddle_price_id:
+              subscription.priceId,
 
-        current_period_start:
-          subscription.periodStart,
+            billing_interval:
+              subscription.billingInterval,
 
-        current_period_end:
-          subscription.periodEnd,
+            current_period_start:
+              subscription.periodStart,
 
-        next_billed_at:
-          subscription.nextBilledAt,
+            current_period_end:
+              subscription.periodEnd,
 
-        cancel_at_period_end:
-          subscription.cancelAtPeriodEnd,
+            next_billed_at:
+              subscription.nextBilledAt,
 
-        canceled_at:
-          subscription.canceledAt,
+            cancel_at_period_end:
+              subscription.cancelAtPeriodEnd,
 
-        paddle_last_event_id:
-          eventId,
+            canceled_at:
+              subscription.canceledAt,
 
-        paddle_last_event_at:
-          getOccurredAt(
-            event
-          ),
-      })
-      .eq(
-        "user_id",
-        userId
-      )
-      .select(
-        "user_id"
-      );
+            paddle_last_event_id:
+              eventId,
+
+            paddle_last_event_at:
+              getOccurredAt(
+                event
+              ),
+          })
+          .eq(
+            "user_id",
+            userId
+          )
+          .select(
+            "user_id"
+          )
+    );
 
   if (
     error
@@ -1086,6 +1245,8 @@ async function handleSubscriptionEvent(
         subscription.status,
       subscriptionId:
         subscription.id,
+      cancelAtPeriodEnd:
+        subscription.cancelAtPeriodEnd,
     }
   );
 }
