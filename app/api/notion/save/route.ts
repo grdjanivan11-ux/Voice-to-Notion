@@ -1,8 +1,25 @@
-import { Client } from "@notionhq/client";
-import { NextResponse } from "next/server";
-
-import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
+  Client,
+} from "@notionhq/client";
+
+import {
+  NextResponse,
+} from "next/server";
+
+import {
+  z,
+} from "zod";
+
+import {
+  supabaseAdmin,
+} from "@/lib/supabase-admin";
+
+import {
+  checkRateLimit,
+} from "@/lib/rate-limit";
+
+import {
+  getAuthenticatedUser,
   incrementMonthlyUsage,
 } from "@/lib/usage";
 
@@ -11,21 +28,252 @@ type Priority =
   | "Medium"
   | "High";
 
-type SaveNoteRequest = {
-  title: string;
-  summary: string;
-  actionItems: string[];
-  category: string;
-  priority?: Priority;
-  dueDate: string | null;
-  transcript: string;
-};
-
 const NOTION_TEXT_LIMIT =
   1900;
 
+const MAX_JSON_REQUEST_BYTES =
+  64 *
+  1024;
+
+const MAX_TITLE_CHARACTERS =
+  200;
+
+const MAX_SUMMARY_CHARACTERS =
+  5_000;
+
+const MAX_TRANSCRIPT_CHARACTERS =
+  20_000;
+
+const MAX_ACTION_ITEMS =
+  50;
+
+const MAX_ACTION_ITEM_CHARACTERS =
+  1_000;
+
+const NOTION_SAVE_RATE_LIMIT = {
+  routeKey:
+    "notion-save",
+
+  limit:
+    20,
+
+  windowSeconds:
+    60,
+} as const;
+
+const ALLOWED_CATEGORIES =
+  [
+    "Work",
+    "Personal",
+    "Study",
+    "Health",
+    "Finance",
+    "Meeting",
+    "Idea",
+    "Task",
+    "Shopping",
+    "Travel",
+    "Research",
+    "Reminder",
+    "Other",
+  ] as const;
+
+function isValidIsoDate(
+  value:
+    string
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
+    return false;
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    value
+      .split("-")
+      .map(Number);
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+  return (
+    date.getUTCFullYear() ===
+      year &&
+    date.getUTCMonth() ===
+      month - 1 &&
+    date.getUTCDate() ===
+      day
+  );
+}
+
+function isValidNotionId(
+  value:
+    string
+) {
+  const normalized =
+    value.replace(
+      /-/g,
+      ""
+    );
+
+  return /^[0-9a-fA-F]{32}$/.test(
+    normalized
+  );
+}
+
+const SaveNoteRequestSchema =
+  z.object({
+    title:
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(
+          MAX_TITLE_CHARACTERS
+        ),
+
+    summary:
+      z
+        .string()
+        .max(
+          MAX_SUMMARY_CHARACTERS
+        ),
+
+    actionItems:
+      z
+        .array(
+          z
+            .string()
+            .max(
+              MAX_ACTION_ITEM_CHARACTERS
+            )
+        )
+        .max(
+          MAX_ACTION_ITEMS
+        ),
+
+    category:
+      z.enum(
+        ALLOWED_CATEGORIES
+      ),
+
+    priority:
+      z
+        .enum([
+          "Low",
+          "Medium",
+          "High",
+        ])
+        .optional()
+        .default(
+          "Low"
+        ),
+
+    dueDate:
+      z
+        .string()
+        .refine(
+          isValidIsoDate,
+          {
+            message:
+              "Invalid due date.",
+          }
+        )
+        .nullable(),
+
+    transcript:
+      z
+        .string()
+        .max(
+          MAX_TRANSCRIPT_CHARACTERS
+        ),
+  });
+
+function getContentLength(
+  request:
+    Request
+) {
+  const value =
+    request.headers.get(
+      "content-length"
+    );
+
+  if (
+    !value
+  ) {
+    return null;
+  }
+
+  const parsed =
+    Number.parseInt(
+      value,
+      10
+    );
+
+  if (
+    !Number.isFinite(
+      parsed
+    ) ||
+    parsed <
+      0
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function getRetryAfterSeconds(
+  resetAt:
+    string | null
+) {
+  if (
+    !resetAt
+  ) {
+    return 60;
+  }
+
+  const resetTime =
+    new Date(
+      resetAt
+    ).getTime();
+
+  if (
+    !Number.isFinite(
+      resetTime
+    )
+  ) {
+    return 60;
+  }
+
+  return Math.max(
+    1,
+    Math.ceil(
+      (
+        resetTime -
+        Date.now()
+      ) /
+        1000
+    )
+  );
+}
+
 function splitText(
-  text: string,
+  text:
+    string,
+
   maxLength =
     NOTION_TEXT_LIMIT
 ) {
@@ -91,7 +339,8 @@ function splitText(
 }
 
 function getCategoryEmoji(
-  category: string
+  category:
+    string
 ) {
   const normalized =
     category
@@ -105,40 +354,28 @@ function getCategoryEmoji(
     > = {
       work:
         "💼",
-
       personal:
         "✨",
-
       study:
         "📚",
-
       health:
         "💪",
-
       finance:
         "💰",
-
       meeting:
         "🤝",
-
       idea:
         "💡",
-
       task:
         "✅",
-
       shopping:
         "🛒",
-
       travel:
         "✈️",
-
       research:
         "🔎",
-
       reminder:
         "⏰",
-
       other:
         "🎙️",
     };
@@ -152,23 +389,21 @@ function getCategoryEmoji(
 }
 
 export async function POST(
-  request: Request
+  request:
+    Request
 ) {
   try {
     /* =====================================================
        AUTH
        ===================================================== */
 
-    const authorization =
-      request.headers.get(
-        "authorization"
+    const user =
+      await getAuthenticatedUser(
+        request
       );
 
     if (
-      !authorization ||
-      !authorization.startsWith(
-        "Bearer "
-      )
+      !user
     ) {
       return NextResponse.json(
         {
@@ -182,46 +417,143 @@ export async function POST(
       );
     }
 
-    const accessToken =
-      authorization
-        .slice(
-          "Bearer ".length
-        )
-        .trim();
+    /* =====================================================
+       SHORT-TERM RATE LIMIT
+       ===================================================== */
 
-    const {
-      data: {
-        user,
-      },
-      error:
-        userError,
-    } =
-      await supabaseAdmin.auth.getUser(
-        accessToken
+    const rateLimit =
+      await checkRateLimit(
+        user.id,
+        NOTION_SAVE_RATE_LIMIT
       );
 
     if (
-      userError ||
-      !user
+      !rateLimit.allowed
     ) {
+      const retryAfter =
+        getRetryAfterSeconds(
+          rateLimit.resetAt
+        );
+
       return NextResponse.json(
         {
           error:
-            "Your login session is invalid or expired.",
+            "Too many Notion save requests. Please try again shortly.",
+
+          code:
+            "RATE_LIMITED",
+
+          remaining:
+            0,
+
+          resetAt:
+            rateLimit.resetAt,
         },
         {
           status:
-            401,
+            429,
+
+          headers: {
+            "Retry-After":
+              String(
+                retryAfter
+              ),
+
+            "X-RateLimit-Limit":
+              String(
+                NOTION_SAVE_RATE_LIMIT.limit
+              ),
+
+            "X-RateLimit-Remaining":
+              "0",
+          },
         }
       );
     }
 
     /* =====================================================
-       BODY
+       REQUEST SIZE
        ===================================================== */
 
-    const body =
-      (await request.json()) as SaveNoteRequest;
+    const contentLength =
+      getContentLength(
+        request
+      );
+
+    if (
+      contentLength !==
+        null &&
+      contentLength >
+        MAX_JSON_REQUEST_BYTES
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Note payload is too large.",
+
+          code:
+            "PAYLOAD_TOO_LARGE",
+        },
+        {
+          status:
+            413,
+        }
+      );
+    }
+
+    /* =====================================================
+       JSON
+       ===================================================== */
+
+    let body:
+      unknown;
+
+    try {
+      body =
+        await request.json();
+    } catch (
+      error
+    ) {
+      console.error(
+        "NOTION SAVE JSON PARSE ERROR:",
+        error
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Invalid JSON request body.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
+    /* =====================================================
+       INPUT VALIDATION
+       ===================================================== */
+
+    const parsedBody =
+      SaveNoteRequestSchema.safeParse(
+        body
+      );
+
+    if (
+      !parsedBody.success
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid note data.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
 
     const {
       title,
@@ -232,41 +564,7 @@ export async function POST(
       dueDate,
       transcript,
     } =
-      body;
-
-    if (
-      !title ||
-      typeof title !==
-        "string"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Title is required.",
-        },
-        {
-          status:
-            400,
-        }
-      );
-    }
-
-    if (
-      !Array.isArray(
-        actionItems
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Action items must be an array.",
-        },
-        {
-          status:
-            400,
-        }
-      );
-    }
+      parsedBody.data;
 
     /* =====================================================
        CONNECTION
@@ -332,7 +630,8 @@ export async function POST(
     }
 
     const dataSourceId =
-      connection.selected_data_source_id;
+      connection
+        .selected_data_source_id;
 
     if (
       !dataSourceId
@@ -349,10 +648,36 @@ export async function POST(
       );
     }
 
+    if (
+      !isValidNotionId(
+        dataSourceId
+      )
+    ) {
+      console.error(
+        "INVALID STORED NOTION DATA SOURCE ID:",
+        {
+          userId:
+            user.id,
+        }
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Your selected Notion destination is invalid. Please choose the destination again.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
     const notion =
       new Client({
         auth:
-          connection.access_token,
+          connection
+            .access_token,
       });
 
     /* =====================================================
@@ -363,36 +688,27 @@ export async function POST(
       title.trim();
 
     const cleanSummary =
-      summary?.trim() ||
+      summary.trim() ||
       "No summary available.";
 
     const cleanCategory =
-      category?.trim() ||
-      "Other";
+      category;
 
     const cleanPriority:
       Priority =
-        priority ===
-          "High" ||
-        priority ===
-          "Medium" ||
-        priority ===
-          "Low"
-          ? priority
-          : "Low";
+        priority;
 
     const cleanTranscript =
-      transcript?.trim() ||
+      transcript.trim() ||
       "No transcript available.";
 
     const cleanActionItems =
       actionItems
         .map(
-          (item) =>
-            typeof item ===
-            "string"
-              ? item.trim()
-              : ""
+          (
+            item
+          ) =>
+            item.trim()
         )
         .filter(
           Boolean
@@ -409,23 +725,54 @@ export async function POST(
       );
 
     /* =====================================================
-       SCHEMA
+       VERIFY DESTINATION + LOAD SCHEMA
        ===================================================== */
 
-    const dataSource =
-      await notion.dataSources.retrieve(
+    let dataSource:
+      Awaited<
+        ReturnType<
+          typeof notion
+            .dataSources
+            .retrieve
+        >
+      >;
+
+    try {
+      dataSource =
+        await notion
+          .dataSources
+          .retrieve({
+            data_source_id:
+              dataSourceId,
+          });
+    } catch (
+      error
+    ) {
+      console.error(
+        "NOTION DATA SOURCE RETRIEVE ERROR:",
+        error
+      );
+
+      return NextResponse.json(
         {
-          data_source_id:
-            dataSourceId,
+          error:
+            "The selected Notion destination is no longer available. Please reconnect Notion or choose the destination again.",
+        },
+        {
+          status:
+            400,
         }
       );
+    }
 
     const schema =
       dataSource.properties;
 
     type PageProperties =
       Parameters<
-        typeof notion.pages.create
+        typeof notion
+          .pages
+          .create
       >[0]["properties"];
 
     const pageProperties:
@@ -1075,9 +1422,6 @@ export async function POST(
 
     /* =====================================================
        USAGE
-
-       Count ONLY after Notion has successfully created
-       the page.
        ===================================================== */
 
     try {
@@ -1089,17 +1433,6 @@ export async function POST(
     } catch (
       usageError
     ) {
-      /*
-        Important:
-        The user's Notion page already exists at this point.
-
-        We do not return a failed save response and encourage
-        them to click Save again, because that could create a
-        duplicate Notion page.
-
-        Log the tracking issue instead.
-      */
-
       console.error(
         "NOTION SAVE USAGE TRACKING ERROR:",
         usageError
@@ -1110,39 +1443,59 @@ export async function POST(
        SUCCESS
        ===================================================== */
 
-    return NextResponse.json({
-      success:
-        true,
+    return NextResponse.json(
+      {
+        success:
+          true,
 
-      pageId:
-        page.id,
+        pageId:
+          page.id,
 
-      url:
-        "url" in page
-          ? page.url
-          : null,
+        url:
+          "url" in page
+            ? page.url
+            : null,
 
-      metadata: {
-        category:
-          cleanCategory,
+        metadata: {
+          category:
+            cleanCategory,
 
-        priority:
-          cleanPriority,
+          priority:
+            cleanPriority,
 
-        actionCount:
-          cleanActionItems.length,
+          actionCount:
+            cleanActionItems.length,
+        },
+
+        workspace: {
+          id:
+            connection
+              .workspace_id,
+
+          name:
+            connection
+              .workspace_name,
+        },
+
+        dataSourceId,
       },
+      {
+        headers: {
+          "X-RateLimit-Limit":
+            String(
+              NOTION_SAVE_RATE_LIMIT.limit
+            ),
 
-      workspace: {
-        id:
-          connection.workspace_id,
-
-        name:
-          connection.workspace_name,
-      },
-
-      dataSourceId,
-    });
+          "X-RateLimit-Remaining":
+            String(
+              Math.max(
+                rateLimit.remaining,
+                0
+              )
+            ),
+        },
+      }
+    );
   } catch (
     error
   ) {
@@ -1151,19 +1504,10 @@ export async function POST(
       error
     );
 
-    const message =
-      error instanceof
-      Error
-        ? error.message
-        : "Unknown Notion error";
-
     return NextResponse.json(
       {
         error:
           "Failed to save note to Notion.",
-
-        details:
-          message,
       },
       {
         status:

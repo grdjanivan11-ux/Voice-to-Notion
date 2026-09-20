@@ -13,10 +13,21 @@ import {
 } from "next/server";
 
 import {
+  checkRateLimit,
+} from "@/lib/rate-limit";
+
+import {
   getAuthenticatedUser,
   hasReachedCaptureLimit,
   incrementMonthlyUsage,
 } from "@/lib/usage";
+
+/* =========================================================
+   VOICE TO NOTION
+   SECURE AI STRUCTURING API
+
+   C9.5.5 — RATE LIMITING
+   ========================================================= */
 
 const openai =
   new OpenAI({
@@ -24,6 +35,24 @@ const openai =
       process.env
         .OPENAI_API_KEY,
   });
+
+const MAX_TRANSCRIPT_CHARACTERS =
+  20_000;
+
+const MAX_JSON_REQUEST_BYTES =
+  100 *
+  1024;
+
+const STRUCTURE_RATE_LIMIT = {
+  routeKey:
+    "structure-note",
+
+  limit:
+    15,
+
+  windowSeconds:
+    60,
+} as const;
 
 const ALLOWED_CATEGORIES =
   [
@@ -41,6 +70,28 @@ const ALLOWED_CATEGORIES =
     "Reminder",
     "Other",
   ] as const;
+
+/* =========================================================
+   REQUEST SCHEMA
+   ========================================================= */
+
+const StructureNoteRequestSchema =
+  z.object({
+    transcript:
+      z
+        .string()
+        .trim()
+        .min(
+          1
+        )
+        .max(
+          MAX_TRANSCRIPT_CHARACTERS
+        ),
+  });
+
+/* =========================================================
+   AI OUTPUT SCHEMA
+   ========================================================= */
 
 const CapturedNoteSchema =
   z.object({
@@ -76,6 +127,83 @@ const CapturedNoteSchema =
         .nullable(),
   });
 
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function getContentLength(
+  request:
+    Request
+) {
+  const value =
+    request.headers.get(
+      "content-length"
+    );
+
+  if (
+    !value
+  ) {
+    return null;
+  }
+
+  const parsed =
+    Number.parseInt(
+      value,
+      10
+    );
+
+  if (
+    !Number.isFinite(
+      parsed
+    ) ||
+    parsed <
+      0
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function getRetryAfterSeconds(
+  resetAt:
+    string | null
+) {
+  if (
+    !resetAt
+  ) {
+    return 60;
+  }
+
+  const resetTime =
+    new Date(
+      resetAt
+    ).getTime();
+
+  if (
+    !Number.isFinite(
+      resetTime
+    )
+  ) {
+    return 60;
+  }
+
+  return Math.max(
+    1,
+    Math.ceil(
+      (
+        resetTime -
+        Date.now()
+      ) /
+        1000
+    )
+  );
+}
+
+/* =========================================================
+   ROUTE
+   ========================================================= */
+
 export async function POST(
   request: Request
 ) {
@@ -105,7 +233,64 @@ export async function POST(
     }
 
     /* =====================================================
-       LIMIT
+       SHORT-TERM RATE LIMIT
+
+       Protect the expensive AI structuring endpoint before
+       parsing input or calling OpenAI.
+       ===================================================== */
+
+    const rateLimit =
+      await checkRateLimit(
+        user.id,
+        STRUCTURE_RATE_LIMIT
+      );
+
+    if (
+      !rateLimit.allowed
+    ) {
+      const retryAfter =
+        getRetryAfterSeconds(
+          rateLimit.resetAt
+        );
+
+      return NextResponse.json(
+        {
+          error:
+            "Too many AI structuring requests. Please try again shortly.",
+
+          code:
+            "RATE_LIMITED",
+
+          remaining:
+            0,
+
+          resetAt:
+            rateLimit.resetAt,
+        },
+        {
+          status:
+            429,
+
+          headers: {
+            "Retry-After":
+              String(
+                retryAfter
+              ),
+
+            "X-RateLimit-Limit":
+              String(
+                STRUCTURE_RATE_LIMIT.limit
+              ),
+
+            "X-RateLimit-Remaining":
+              "0",
+          },
+        }
+      );
+    }
+
+    /* =====================================================
+       PLAN LIMIT
        ===================================================== */
 
     const limit =
@@ -141,42 +326,57 @@ export async function POST(
     }
 
     /* =====================================================
-       BODY
+       REQUEST SIZE
        ===================================================== */
 
-    const body =
-      await request.json();
-
-    const transcript =
-      body.transcript;
+    const contentLength =
+      getContentLength(
+        request
+      );
 
     if (
-      !transcript ||
-      typeof transcript !==
-        "string"
+      contentLength !==
+        null &&
+      contentLength >
+        MAX_JSON_REQUEST_BYTES
     ) {
       return NextResponse.json(
         {
           error:
-            "Transcript is required.",
+            "Transcript request is too large.",
+
+          code:
+            "PAYLOAD_TOO_LARGE",
         },
         {
           status:
-            400,
+            413,
         }
       );
     }
 
-    const cleanTranscript =
-      transcript.trim();
+    /* =====================================================
+       JSON
+       ===================================================== */
 
-    if (
-      !cleanTranscript
+    let body:
+      unknown;
+
+    try {
+      body =
+        await request.json();
+    } catch (
+      error
     ) {
+      console.error(
+        "STRUCTURE NOTE JSON PARSE ERROR:",
+        error
+      );
+
       return NextResponse.json(
         {
           error:
-            "Transcript is empty.",
+            "Invalid JSON request body.",
         },
         {
           status:
@@ -186,7 +386,69 @@ export async function POST(
     }
 
     /* =====================================================
+       INPUT VALIDATION
+       ===================================================== */
+
+    const parsedBody =
+      StructureNoteRequestSchema.safeParse(
+        body
+      );
+
+    if (
+      !parsedBody.success
+    ) {
+      const transcriptTooLong =
+        parsedBody.error.issues.some(
+          (
+            issue
+          ) =>
+            issue.path[0] ===
+              "transcript" &&
+            issue.code ===
+              "too_big"
+        );
+
+      if (
+        transcriptTooLong
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              `Transcript is too long. Maximum length is ${MAX_TRANSCRIPT_CHARACTERS.toLocaleString()} characters.`,
+
+            code:
+              "TRANSCRIPT_TOO_LONG",
+
+            maxCharacters:
+              MAX_TRANSCRIPT_CHARACTERS,
+          },
+          {
+            status:
+              413,
+          }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "A non-empty transcript is required.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
+    const cleanTranscript =
+      parsedBody.data
+        .transcript;
+
+    /* =====================================================
        MOCK
+
+       Mock AI intentionally does NOT consume real usage.
        ===================================================== */
 
     const useMockAI =
@@ -222,29 +484,43 @@ export async function POST(
           true,
       };
 
-      await incrementMonthlyUsage(
-        user.id,
-        "ai_captures",
-        1
-      );
-
       return NextResponse.json(
-        mockNote
+        mockNote,
+        {
+          headers: {
+            "X-RateLimit-Limit":
+              String(
+                STRUCTURE_RATE_LIMIT.limit
+              ),
+
+            "X-RateLimit-Remaining":
+              String(
+                Math.max(
+                  rateLimit.remaining,
+                  0
+                )
+              ),
+          },
+        }
       );
     }
 
     /* =====================================================
-       OPENAI
+       OPENAI CONFIGURATION
        ===================================================== */
 
     if (
       !process.env
         .OPENAI_API_KEY
     ) {
+      console.error(
+        "OPENAI_API_KEY is missing."
+      );
+
       return NextResponse.json(
         {
           error:
-            "OPENAI_API_KEY is missing.",
+            "AI structuring service is unavailable.",
         },
         {
           status:
@@ -252,6 +528,10 @@ export async function POST(
         }
       );
     }
+
+    /* =====================================================
+       OPENAI
+       ===================================================== */
 
     const currentDate =
       new Date()
@@ -424,21 +704,57 @@ IMPORTANT:
     }
 
     /* =====================================================
-       COUNT SUCCESSFUL CAPTURE
+       USAGE
+
+       OpenAI has already succeeded.
+
+       Usage telemetry must never convert a successful AI
+       response into a failed user request.
        ===================================================== */
 
-    await incrementMonthlyUsage(
-      user.id,
-      "ai_captures",
-      1
+    try {
+      await incrementMonthlyUsage(
+        user.id,
+        "ai_captures",
+        1
+      );
+    } catch (
+      usageError
+    ) {
+      console.error(
+        "STRUCTURE USAGE TRACKING ERROR:",
+        usageError
+      );
+    }
+
+    /* =====================================================
+       SUCCESS
+       ===================================================== */
+
+    return NextResponse.json(
+      {
+        ...note,
+
+        mock:
+          false,
+      },
+      {
+        headers: {
+          "X-RateLimit-Limit":
+            String(
+              STRUCTURE_RATE_LIMIT.limit
+            ),
+
+          "X-RateLimit-Remaining":
+            String(
+              Math.max(
+                rateLimit.remaining,
+                0
+              )
+            ),
+        },
+      }
     );
-
-    return NextResponse.json({
-      ...note,
-
-      mock:
-        false,
-    });
   } catch (
     error
   ) {
@@ -461,6 +777,28 @@ IMPORTANT:
         {
           status:
             429,
+        }
+      );
+    }
+
+    if (
+      error instanceof
+        OpenAI.APIError &&
+      error.status ===
+        401
+    ) {
+      console.error(
+        "OPENAI STRUCTURE AUTHENTICATION ERROR"
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "AI structuring service is unavailable.",
+        },
+        {
+          status:
+            500,
         }
       );
     }
