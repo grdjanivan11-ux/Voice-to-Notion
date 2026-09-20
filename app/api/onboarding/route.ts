@@ -12,7 +12,7 @@ import {
 
 /* =========================================================
    VOICE TO NOTION
-   C9.4 — ONBOARDING STATE
+   C9.4 — ONBOARDING + GETTING STARTED STATE
    ========================================================= */
 
 type OnboardingRow = {
@@ -27,6 +27,15 @@ type OnboardingRow = {
 
   completed_at:
     string | null;
+
+  first_capture_completed:
+    boolean;
+
+  first_capture_completed_at:
+    string | null;
+
+  checklist_dismissed:
+    boolean;
 
   created_at:
     string;
@@ -49,8 +58,61 @@ type OnboardingAction =
     }
   | {
       action:
+        "dismiss_checklist";
+    }
+  | {
+      action:
+        "restore_checklist";
+    }
+  | {
+      action:
         "reset";
     };
+
+/* =========================================================
+   SELECT
+   ========================================================= */
+
+const onboardingSelect = `
+  user_id,
+  completed,
+  current_step,
+  completed_at,
+  first_capture_completed,
+  first_capture_completed_at,
+  checklist_dismissed,
+  created_at,
+  updated_at
+`;
+
+/* =========================================================
+   RESPONSE NORMALIZER
+   ========================================================= */
+
+function normalizeOnboarding(
+  onboarding:
+    OnboardingRow
+) {
+  return {
+    completed:
+      onboarding.completed,
+
+    currentStep:
+      onboarding.current_step,
+
+    completedAt:
+      onboarding.completed_at,
+
+    firstCaptureCompleted:
+      onboarding.first_capture_completed,
+
+    firstCaptureCompletedAt:
+      onboarding.first_capture_completed_at,
+
+    checklistDismissed:
+      onboarding.checklist_dismissed,
+  };
+}
 
 /* =========================================================
    ENSURE ONBOARDING ROW
@@ -63,6 +125,7 @@ async function ensureOnboardingRow(
   const {
     data:
       existing,
+
     error:
       lookupError,
   } =
@@ -71,14 +134,7 @@ async function ensureOnboardingRow(
         "user_onboarding"
       )
       .select(
-        `
-          user_id,
-          completed,
-          current_step,
-          completed_at,
-          created_at,
-          updated_at
-        `
+        onboardingSelect
       )
       .eq(
         "user_id",
@@ -105,6 +161,10 @@ async function ensureOnboardingRow(
     return existing as OnboardingRow;
   }
 
+  const now =
+    new Date()
+      .toISOString();
+
   const {
     error:
       insertError,
@@ -127,9 +187,20 @@ async function ensureOnboardingRow(
           completed_at:
             null,
 
+          first_capture_completed:
+            false,
+
+          first_capture_completed_at:
+            null,
+
+          checklist_dismissed:
+            false,
+
+          created_at:
+            now,
+
           updated_at:
-            new Date()
-              .toISOString(),
+            now,
         },
         {
           onConflict:
@@ -156,6 +227,7 @@ async function ensureOnboardingRow(
   const {
     data:
       created,
+
     error:
       createdError,
   } =
@@ -164,14 +236,7 @@ async function ensureOnboardingRow(
         "user_onboarding"
       )
       .select(
-        `
-          user_id,
-          completed,
-          current_step,
-          completed_at,
-          created_at,
-          updated_at
-        `
+        onboardingSelect
       )
       .eq(
         "user_id",
@@ -194,6 +259,48 @@ async function ensureOnboardingRow(
   }
 
   return created as OnboardingRow;
+}
+
+/* =========================================================
+   LOAD CURRENT ROW
+   ========================================================= */
+
+async function loadOnboardingRow(
+  userId:
+    string
+) {
+  const {
+    data,
+    error,
+  } =
+    await supabaseAdmin
+      .from(
+        "user_onboarding"
+      )
+      .select(
+        onboardingSelect
+      )
+      .eq(
+        "user_id",
+        userId
+      )
+      .single();
+
+  if (
+    error ||
+    !data
+  ) {
+    console.error(
+      "ONBOARDING RELOAD ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Could not reload onboarding."
+    );
+  }
+
+  return data as OnboardingRow;
 }
 
 /* =========================================================
@@ -237,16 +344,10 @@ export async function GET(
       success:
         true,
 
-      onboarding: {
-        completed:
-          onboarding.completed,
-
-        currentStep:
-          onboarding.current_step,
-
-        completedAt:
-          onboarding.completed_at,
-      },
+      onboarding:
+        normalizeOnboarding(
+          onboarding
+        ),
     });
   } catch (
     error
@@ -385,25 +486,24 @@ export async function PATCH(
         );
       }
 
+      const onboarding =
+        await loadOnboardingRow(
+          user.id
+        );
+
       return NextResponse.json({
         success:
           true,
 
-        onboarding: {
-          completed:
-            false,
-
-          currentStep:
-            step,
-
-          completedAt:
-            null,
-        },
+        onboarding:
+          normalizeOnboarding(
+            onboarding
+          ),
       });
     }
 
     /* =====================================================
-       COMPLETE
+       COMPLETE INITIAL ONBOARDING
        ===================================================== */
 
     if (
@@ -448,29 +548,166 @@ export async function PATCH(
         );
       }
 
+      const onboarding =
+        await loadOnboardingRow(
+          user.id
+        );
+
       return NextResponse.json({
         success:
           true,
 
-        onboarding: {
-          completed:
-            true,
-
-          currentStep:
-            3,
-
-          completedAt:
-            now,
-        },
+        onboarding:
+          normalizeOnboarding(
+            onboarding
+          ),
       });
     }
 
     /* =====================================================
-       RESET
+       DISMISS GETTING STARTED CHECKLIST
+       ===================================================== */
+
+    if (
+      body.action ===
+      "dismiss_checklist"
+    ) {
+      const existing =
+        await loadOnboardingRow(
+          user.id
+        );
+
+      if (
+        !existing
+          .first_capture_completed
+      ) {
+        return NextResponse.json(
+          {
+            success:
+              false,
+
+            error:
+              "Complete setup before dismissing the checklist.",
+          },
+          {
+            status:
+              400,
+          }
+        );
+      }
+
+      const {
+        error,
+      } =
+        await supabaseAdmin
+          .from(
+            "user_onboarding"
+          )
+          .update({
+            checklist_dismissed:
+              true,
+
+            updated_at:
+              now,
+          })
+          .eq(
+            "user_id",
+            user.id
+          );
+
+      if (
+        error
+      ) {
+        console.error(
+          "GETTING STARTED DISMISS ERROR:",
+          error
+        );
+
+        throw new Error(
+          "Could not dismiss checklist."
+        );
+      }
+
+      const onboarding =
+        await loadOnboardingRow(
+          user.id
+        );
+
+      return NextResponse.json({
+        success:
+          true,
+
+        onboarding:
+          normalizeOnboarding(
+            onboarding
+          ),
+      });
+    }
+
+    /* =====================================================
+       RESTORE CHECKLIST
+       ===================================================== */
+
+    if (
+      body.action ===
+      "restore_checklist"
+    ) {
+      const {
+        error,
+      } =
+        await supabaseAdmin
+          .from(
+            "user_onboarding"
+          )
+          .update({
+            checklist_dismissed:
+              false,
+
+            updated_at:
+              now,
+          })
+          .eq(
+            "user_id",
+            user.id
+          );
+
+      if (
+        error
+      ) {
+        console.error(
+          "GETTING STARTED RESTORE ERROR:",
+          error
+        );
+
+        throw new Error(
+          "Could not restore checklist."
+        );
+      }
+
+      const onboarding =
+        await loadOnboardingRow(
+          user.id
+        );
+
+      return NextResponse.json({
+        success:
+          true,
+
+        onboarding:
+          normalizeOnboarding(
+            onboarding
+          ),
+      });
+    }
+
+    /* =====================================================
+       RESET INITIAL ONBOARDING
 
        Development helper.
-       This lets us test onboarding again without deleting
-       the account.
+
+       Important:
+       This does NOT erase the permanent first-capture
+       milestone.
        ===================================================== */
 
     if (
@@ -494,6 +731,9 @@ export async function PATCH(
             completed_at:
               null,
 
+            checklist_dismissed:
+              false,
+
             updated_at:
               now,
           })
@@ -515,20 +755,19 @@ export async function PATCH(
         );
       }
 
+      const onboarding =
+        await loadOnboardingRow(
+          user.id
+        );
+
       return NextResponse.json({
         success:
           true,
 
-        onboarding: {
-          completed:
-            false,
-
-          currentStep:
-            1,
-
-          completedAt:
-            null,
-        },
+        onboarding:
+          normalizeOnboarding(
+            onboarding
+          ),
       });
     }
 

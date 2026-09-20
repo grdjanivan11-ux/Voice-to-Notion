@@ -464,6 +464,16 @@ export default function Home() {
     selectedDataSourceId !==
     savedDataSourceId;
 
+  const hasNotionConnection =
+    Boolean(
+      notionWorkspaceName
+    ) ||
+    notionDataSources.length >
+      0 ||
+    Boolean(
+      savedDataSourceId
+    );
+
   const isPro =
     usagePlan ===
     "pro";
@@ -3044,6 +3054,101 @@ export default function Home() {
                     <p className="mt-4 text-xs text-[var(--muted)]">
                       Loading destination...
                     </p>
+                  ) : !hasNotionConnection ? (
+                    <div className="mt-4">
+
+                      <div className="rounded-2xl border border-violet-400/15 bg-violet-400/[0.05] p-4">
+
+                        <p className="text-xs font-semibold">
+                          Connect Notion to complete setup
+                        </p>
+
+                        <p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">
+                          Authorize your workspace, then choose the database where your structured captures should land.
+                        </p>
+
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={
+                          connectNotion
+                        }
+                        className="vtn-primary mt-3 min-h-11 w-full px-4 text-xs"
+                      >
+                        Connect Notion
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={
+                          loadNotionDatabases
+                        }
+                        className="vtn-secondary mt-2 min-h-10 w-full px-3 text-[10px]"
+                      >
+                        I already connected — refresh
+                      </button>
+
+                      {notionDatabaseError && (
+                        <div
+                          className="vtn-error mt-3 rounded-xl p-3 text-xs"
+                          role="alert"
+                        >
+                          {notionDatabaseError}
+                        </div>
+                      )}
+
+                    </div>
+                  ) : notionDataSources.length ===
+                    0 ? (
+                    <div className="mt-4">
+
+                      <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.05] p-4">
+
+                        <p className="text-xs font-semibold">
+                          No Notion databases available yet
+                        </p>
+
+                        <p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">
+                          Share a database with the Voice to Notion integration, then refresh this destination list.
+                        </p>
+
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+
+                        <button
+                          type="button"
+                          onClick={
+                            loadNotionDatabases
+                          }
+                          className="vtn-primary min-h-11 px-3 text-xs"
+                        >
+                          Refresh
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={
+                            connectNotion
+                          }
+                          className="vtn-secondary min-h-11 px-3 text-xs"
+                        >
+                          Reconnect
+                        </button>
+
+                      </div>
+
+                      {notionDatabaseError && (
+                        <div
+                          className="vtn-error mt-3 rounded-xl p-3 text-xs"
+                          role="alert"
+                        >
+                          {notionDatabaseError}
+                        </div>
+                      )}
+
+                    </div>
                   ) : (
                     <>
 
@@ -3342,17 +3447,25 @@ export default function Home() {
                       <p className="mt-4 text-sm font-semibold">
                         {limitReached
                           ? "Capture allowance used"
-                          : "Waiting for a thought"}
+                          : transcript.trim()
+                            ? "Ready to structure"
+                            : savedDataSourceId
+                              ? "Ready for your first capture"
+                              : "Start with your first thought"}
                       </p>
 
-                      <p className="mt-2 max-w-[270px] text-center text-[11px] leading-5 text-[var(--muted)]">
+                      <p className="mt-2 max-w-[290px] text-center text-[11px] leading-5 text-[var(--muted)]">
                         {limitReached
                           ? isPro
                             ? "Your monthly Pro allowance will reset next month."
                             : "Unlock Pro for 500 captures and longer voice sessions."
-                          : isPro
-                            ? "Advanced AI is ready to structure your next Pro capture."
-                            : "Tap to speak and your AI-structured note will appear here."}
+                          : transcript.trim()
+                            ? "Your transcript is ready. Select Structure with AI to turn it into an organized note."
+                            : savedDataSourceId
+                              ? isPro
+                                ? "Your Pro workspace is ready. Tap the microphone and speak naturally."
+                                : "Tap the microphone, speak naturally, and AI will turn your thought into a structured note."
+                              : "You can capture a thought now. Connect Notion and choose a destination before sending the finished note."}
                       </p>
 
                     </div>

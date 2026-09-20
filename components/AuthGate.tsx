@@ -10,6 +10,7 @@ import type {
   Session,
 } from "@supabase/supabase-js";
 
+import GettingStartedChecklist from "@/components/GettingStartedChecklist";
 import OnboardingFlow from "@/components/OnboardingFlow";
 
 import {
@@ -34,6 +35,15 @@ type OnboardingResponse = {
 
     completedAt:
       string | null;
+
+    firstCaptureCompleted:
+      boolean;
+
+    firstCaptureCompletedAt:
+      string | null;
+
+    checklistDismissed:
+      boolean;
   };
 
   error?:
@@ -394,6 +404,12 @@ export default function AuthGate({
   return (
     <>
       {children}
+
+      <GettingStartedChecklist
+        accessToken={
+          session.access_token
+        }
+      />
     </>
   );
 }
