@@ -13,7 +13,7 @@ import {
 
 /* =========================================================
    VOICE TO NOTION
-   C9.3 — VERIFIED PADDLE WEBHOOK
+   C9.5.7 — HARDENED PADDLE WEBHOOK
    ========================================================= */
 
 type PaddleCustomData = {
@@ -35,87 +35,38 @@ type SubscriptionStatus =
   | "canceled";
 
 type NormalizedTransaction = {
-  id:
-    string | null;
-
-  customerId:
-    string | null;
-
-  subscriptionId:
-    string | null;
-
-  customData:
-    PaddleCustomData | null;
-
-  priceId:
-    string | null;
-
-  billingInterval:
-    BillingInterval;
-
-  periodStart:
-    string | null;
-
-  periodEnd:
-    string | null;
+  id: string | null;
+  customerId: string | null;
+  subscriptionId: string | null;
+  customData: PaddleCustomData | null;
+  priceId: string | null;
+  billingInterval: BillingInterval;
+  periodStart: string | null;
+  periodEnd: string | null;
 };
 
 type NormalizedSubscription = {
-  id:
-    string | null;
-
-  customerId:
-    string | null;
-
-  status:
-    SubscriptionStatus;
-
-  customData:
-    PaddleCustomData | null;
-
-  priceId:
-    string | null;
-
-  billingInterval:
-    BillingInterval;
-
-  periodStart:
-    string | null;
-
-  periodEnd:
-    string | null;
-
-  nextBilledAt:
-    string | null;
-
-  cancelAtPeriodEnd:
-    boolean;
-
-  canceledAt:
-    string | null;
+  id: string | null;
+  customerId: string | null;
+  status: SubscriptionStatus | null;
+  customData: PaddleCustomData | null;
+  priceId: string | null;
+  billingInterval: BillingInterval;
+  periodStart: string | null;
+  periodEnd: string | null;
+  nextBilledAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  canceledAt: string | null;
 };
 
 type PaddleEventLike = {
-  eventId?:
-    string;
-
-  event_id?:
-    string;
-
-  eventType?:
-    string;
-
-  event_type?:
-    string;
-
-  occurredAt?:
-    string;
-
-  occurred_at?:
-    string;
-
-  data:
-    unknown;
+  eventId?: string;
+  event_id?: string;
+  eventType?: string;
+  event_type?: string;
+  occurredAt?: string;
+  occurred_at?: string;
+  data: unknown;
 };
 
 type SupabaseErrorLike = {
@@ -126,11 +77,17 @@ type SupabaseErrorLike = {
 };
 
 type SupabaseOperationResult<T> = {
-  data:
-    T;
+  data: T;
+  error: SupabaseErrorLike | null;
+};
 
-  error:
-    SupabaseErrorLike | null;
+type ClaimWebhookEventRow = {
+  claimed: boolean;
+  current_status: string | null;
+};
+
+type ClaimEventOrderRow = {
+  allowed: boolean;
 };
 
 /* =========================================================
@@ -142,9 +99,7 @@ function getPaddleClient() {
     process.env
       .PADDLE_API_KEY;
 
-  if (
-    !apiKey
-  ) {
+  if (!apiKey) {
     throw new Error(
       "PADDLE_API_KEY is missing."
     );
@@ -165,18 +120,145 @@ function getPaddleClient() {
   );
 }
 
+
+function getAllowedProPriceIds() {
+  const monthlyPriceId =
+    process.env
+      .NEXT_PUBLIC_PADDLE_PRO_MONTHLY_PRICE_ID;
+
+  const annualPriceId =
+    process.env
+      .NEXT_PUBLIC_PADDLE_PRO_ANNUAL_PRICE_ID;
+
+  if (
+    !monthlyPriceId ||
+    !annualPriceId
+  ) {
+    throw new Error(
+      "Paddle Pro price configuration is missing."
+    );
+  }
+
+  return new Set([
+    monthlyPriceId,
+    annualPriceId,
+  ]);
+}
+
+function assertAllowedProPriceId(
+  priceId:
+    string | null
+) {
+  if (
+    !priceId
+  ) {
+    throw new Error(
+      "Paddle event is missing a price ID."
+    );
+  }
+
+  const allowedPriceIds =
+    getAllowedProPriceIds();
+
+  if (
+    !allowedPriceIds.has(
+      priceId
+    )
+  ) {
+    throw new Error(
+      "Paddle event contains an unrecognized price ID."
+    );
+  }
+}
+
+
+function assertPaddleId(
+  value:
+    string | null,
+  prefix:
+    string,
+  label:
+    string
+) {
+  if (
+    !value ||
+    !value.startsWith(
+      prefix
+    ) ||
+    value.length <=
+      prefix.length
+  ) {
+    throw new Error(
+      `Paddle event contains an invalid ${label}.`
+    );
+  }
+}
+
+function assertTransactionPayload(
+  transaction:
+    NormalizedTransaction
+) {
+  assertPaddleId(
+    transaction.id,
+    "txn_",
+    "transaction ID"
+  );
+
+  assertPaddleId(
+    transaction.customerId,
+    "ctm_",
+    "customer ID"
+  );
+
+  assertPaddleId(
+    transaction.subscriptionId,
+    "sub_",
+    "subscription ID"
+  );
+
+  assertTransactionPayload(
+    transaction
+  );
+}
+
+function assertSubscriptionPayload(
+  subscription:
+    NormalizedSubscription
+) {
+  assertPaddleId(
+    subscription.id,
+    "sub_",
+    "subscription ID"
+  );
+
+  assertPaddleId(
+    subscription.customerId,
+    "ctm_",
+    "customer ID"
+  );
+
+  assertSubscriptionPayload(
+    subscription
+  );
+
+  if (
+    !subscription.status
+  ) {
+    throw new Error(
+      "Paddle event contains an unrecognized subscription status."
+    );
+  }
+}
+
 /* =========================================================
    SUPABASE RETRY SAFETY
    ========================================================= */
 
 function sleep(
-  milliseconds:
-    number
+  milliseconds: number
 ) {
   return new Promise<void>(
-    (
-      resolve
-    ) => {
+    (resolve) => {
       setTimeout(
         resolve,
         milliseconds
@@ -186,12 +268,9 @@ function sleep(
 }
 
 function isTransientSupabaseError(
-  error:
-    SupabaseErrorLike | null
+  error: SupabaseErrorLike | null
 ) {
-  if (
-    !error
-  ) {
+  if (!error) {
     return false;
   }
 
@@ -218,14 +297,11 @@ function isTransientSupabaseError(
 }
 
 async function runSupabaseOperationWithRetry<T>(
-  label:
-    string,
-
-  operation:
-    () =>
-      Promise<
-        SupabaseOperationResult<T>
-      >
+  label: string,
+  operation: () =>
+    Promise<
+      SupabaseOperationResult<T>
+    >
 ): Promise<
   SupabaseOperationResult<T>
 > {
@@ -240,14 +316,10 @@ async function runSupabaseOperationWithRetry<T>(
     await operation();
 
   for (
-    let attempt =
-      0;
-
+    let attempt = 0;
     attempt <
     retryDelays.length;
-
-    attempt +=
-      1
+    attempt += 1
   ) {
     if (
       !isTransientSupabaseError(
@@ -294,13 +366,11 @@ async function runSupabaseOperationWithRetry<T>(
    ========================================================= */
 
 function asRecord(
-  value:
-    unknown
-):
-  Record<
-    string,
-    unknown
-  > {
+  value: unknown
+): Record<
+  string,
+  unknown
+> {
   if (
     value &&
     typeof value ===
@@ -319,8 +389,7 @@ function asRecord(
 }
 
 function asString(
-  value:
-    unknown
+  value: unknown
 ) {
   return typeof value ===
     "string"
@@ -329,17 +398,12 @@ function asString(
 }
 
 function getEither(
-  record:
-    Record<
-      string,
-      unknown
-    >,
-
-  camelKey:
+  record: Record<
     string,
-
-  snakeKey:
-    string
+    unknown
+  >,
+  camelKey: string,
+  snakeKey: string
 ) {
   if (
     camelKey in
@@ -356,17 +420,12 @@ function getEither(
 }
 
 function getStringEither(
-  record:
-    Record<
-      string,
-      unknown
-    >,
-
-  camelKey:
+  record: Record<
     string,
-
-  snakeKey:
-    string
+    unknown
+  >,
+  camelKey: string,
+  snakeKey: string
 ) {
   return asString(
     getEither(
@@ -382,8 +441,7 @@ function getStringEither(
    ========================================================= */
 
 function getEventId(
-  event:
-    PaddleEventLike
+  event: PaddleEventLike
 ) {
   return (
     event.eventId ??
@@ -393,8 +451,7 @@ function getEventId(
 }
 
 function getEventType(
-  event:
-    PaddleEventLike
+  event: PaddleEventLike
 ) {
   return (
     event.eventType ??
@@ -404,8 +461,7 @@ function getEventType(
 }
 
 function getOccurredAt(
-  event:
-    PaddleEventLike
+  event: PaddleEventLike
 ) {
   return (
     event.occurredAt ??
@@ -420,8 +476,7 @@ function getOccurredAt(
    ========================================================= */
 
 function getCustomData(
-  value:
-    unknown
+  value: unknown
 ): PaddleCustomData | null {
   const record =
     asRecord(
@@ -500,10 +555,8 @@ function getSupabaseUserId(
    ========================================================= */
 
 function normalizeInterval(
-  value:
-    unknown
-):
-  BillingInterval {
+  value: unknown
+): BillingInterval {
   if (
     value ===
     "year"
@@ -522,11 +575,11 @@ function normalizeInterval(
 }
 
 function normalizeStatus(
-  value:
-    unknown
-):
-  SubscriptionStatus {
+  value: unknown
+): SubscriptionStatus | null {
   if (
+    value ===
+      "active" ||
     value ===
       "trialing" ||
     value ===
@@ -539,15 +592,14 @@ function normalizeStatus(
     return value;
   }
 
-  return "active";
+  return null;
 }
 
 function getFirstItem(
-  data:
-    Record<
-      string,
-      unknown
-    >
+  data: Record<
+    string,
+    unknown
+  >
 ) {
   const items =
     data.items;
@@ -556,8 +608,7 @@ function getFirstItem(
     !Array.isArray(
       items
     ) ||
-    items.length ===
-      0
+    items.length === 0
   ) {
     return {};
   }
@@ -568,11 +619,10 @@ function getFirstItem(
 }
 
 function getPriceRecord(
-  data:
-    Record<
-      string,
-      unknown
-    >
+  data: Record<
+    string,
+    unknown
+  >
 ) {
   const item =
     getFirstItem(
@@ -585,11 +635,10 @@ function getPriceRecord(
 }
 
 function getPriceId(
-  data:
-    Record<
-      string,
-      unknown
-    >
+  data: Record<
+    string,
+    unknown
+  >
 ) {
   const price =
     getPriceRecord(
@@ -602,11 +651,10 @@ function getPriceId(
 }
 
 function getIntervalFromPrice(
-  data:
-    Record<
-      string,
-      unknown
-    >
+  data: Record<
+    string,
+    unknown
+  >
 ) {
   const price =
     getPriceRecord(
@@ -629,11 +677,10 @@ function getIntervalFromPrice(
 }
 
 function getBillingCycleInterval(
-  data:
-    Record<
-      string,
-      unknown
-    >
+  data: Record<
+    string,
+    unknown
+  >
 ) {
   const billingCycle =
     asRecord(
@@ -651,17 +698,12 @@ function getBillingCycleInterval(
 }
 
 function getPeriod(
-  data:
-    Record<
-      string,
-      unknown
-    >,
-
-  camelKey:
+  data: Record<
     string,
-
-  snakeKey:
-    string
+    unknown
+  >,
+  camelKey: string,
+  snakeKey: string
 ) {
   const period =
     asRecord(
@@ -690,14 +732,12 @@ function getPeriod(
 }
 
 /* =========================================================
-   NORMALIZE TRANSACTION
+   NORMALIZATION
    ========================================================= */
 
 function normalizeTransaction(
-  rawData:
-    unknown
-):
-  NormalizedTransaction {
+  rawData: unknown
+): NormalizedTransaction {
   const data =
     asRecord(
       rawData
@@ -753,15 +793,9 @@ function normalizeTransaction(
   };
 }
 
-/* =========================================================
-   NORMALIZE SUBSCRIPTION
-   ========================================================= */
-
 function normalizeSubscription(
-  rawData:
-    unknown
-):
-  NormalizedSubscription {
+  rawData: unknown
+): NormalizedSubscription {
   const data =
     asRecord(
       rawData
@@ -852,50 +886,189 @@ function normalizeSubscription(
 }
 
 /* =========================================================
-   IDEMPOTENCY
+   DURABLE WEBHOOK EVENT LEDGER
    ========================================================= */
 
-async function eventAlreadyProcessed(
-  eventId:
-    string
+async function claimWebhookEvent(
+  eventId: string,
+  eventType: string,
+  occurredAt: string
 ) {
   const {
     data,
     error,
   } =
     await runSupabaseOperationWithRetry(
-      "paddle-idempotency-check",
+      "paddle-webhook-claim",
 
       async () =>
         await supabaseAdmin
-          .from(
-            "user_plans"
+          .rpc(
+            "claim_paddle_webhook_event",
+            {
+              p_event_id:
+                eventId,
+
+              p_event_type:
+                eventType,
+
+              p_occurred_at:
+                occurredAt,
+            }
           )
-          .select(
-            "user_id"
-          )
-          .eq(
-            "paddle_last_event_id",
-            eventId
-          )
-          .maybeSingle()
     );
 
   if (
     error
   ) {
     console.error(
-      "PADDLE IDEMPOTENCY LOOKUP ERROR:",
+      "PADDLE WEBHOOK CLAIM ERROR:",
       error
     );
 
     throw new Error(
-      "Could not check Paddle event."
+      "Could not claim Paddle webhook event."
     );
   }
 
-  return Boolean(
-    data
+  const row =
+    Array.isArray(
+      data
+    )
+      ? (
+          data[0] as
+            | ClaimWebhookEventRow
+            | undefined
+        )
+      : (
+          data as
+            | ClaimWebhookEventRow
+            | null
+        );
+
+  return {
+    claimed:
+      row?.claimed ===
+      true,
+
+    currentStatus:
+      row
+        ?.current_status ??
+      null,
+  };
+}
+
+async function finishWebhookEvent(
+  eventId: string,
+  status:
+    "processed" |
+    "failed",
+  userId:
+    string | null,
+  errorMessage:
+    string | null
+) {
+  const {
+    error,
+  } =
+    await runSupabaseOperationWithRetry(
+      "paddle-webhook-finish",
+
+      async () =>
+        await supabaseAdmin
+          .rpc(
+            "finish_paddle_webhook_event",
+            {
+              p_event_id:
+                eventId,
+
+              p_status:
+                status,
+
+              p_user_id:
+                userId,
+
+              p_error_message:
+                errorMessage,
+            }
+          )
+    );
+
+  if (
+    error
+  ) {
+    console.error(
+      "PADDLE WEBHOOK FINISH ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Could not finalize Paddle webhook event."
+    );
+  }
+}
+
+
+async function claimPaddleEventOrder(
+  userId: string,
+  eventId: string,
+  occurredAt: string
+) {
+  const {
+    data,
+    error,
+  } =
+    await runSupabaseOperationWithRetry(
+      "paddle-event-order-claim",
+
+      async () =>
+        await supabaseAdmin
+          .rpc(
+            "claim_paddle_event_order",
+            {
+              p_user_id:
+                userId,
+
+              p_event_id:
+                eventId,
+
+              p_occurred_at:
+                occurredAt,
+            }
+          )
+    );
+
+  if (
+    error
+  ) {
+    console.error(
+      "PADDLE EVENT ORDER CLAIM ERROR:",
+      error
+    );
+
+    throw new Error(
+      "Could not verify Paddle event order."
+    );
+  }
+
+  const row =
+    Array.isArray(
+      data
+    )
+      ? (
+          data[0] as
+            | ClaimEventOrderRow
+            | undefined
+        )
+      : (
+          data as
+            | ClaimEventOrderRow
+            | null
+        );
+
+  return (
+    row?.allowed ===
+    true
   );
 }
 
@@ -904,18 +1077,16 @@ async function eventAlreadyProcessed(
    ========================================================= */
 
 async function handleTransactionCompleted(
-  event:
-    PaddleEventLike
+  event: PaddleEventLike
 ) {
-  const eventId =
-    getEventId(
-      event
-    );
-
   const transaction =
     normalizeTransaction(
       event.data
     );
+
+  assertAllowedProPriceId(
+    transaction.priceId
+  );
 
   const userId =
     getSupabaseUserId(
@@ -928,13 +1099,17 @@ async function handleTransactionCompleted(
     console.warn(
       "PADDLE TRANSACTION WITHOUT SUPABASE USER:",
       {
-        eventId,
+        eventId:
+          getEventId(
+            event
+          ),
+
         transactionId:
           transaction.id,
       }
     );
 
-    return;
+    return null;
   }
 
   const {
@@ -984,7 +1159,9 @@ async function handleTransactionCompleted(
               null,
 
             paddle_last_event_id:
-              eventId,
+              getEventId(
+                event
+              ),
 
             paddle_last_event_at:
               getOccurredAt(
@@ -1015,8 +1192,7 @@ async function handleTransactionCompleted(
 
   if (
     !data ||
-    data.length ===
-      0
+    data.length === 0
   ) {
     throw new Error(
       "No user_plans row exists for this Paddle customer."
@@ -1027,12 +1203,16 @@ async function handleTransactionCompleted(
     "PADDLE PRO ACTIVATED:",
     {
       userId,
+
       transactionId:
         transaction.id,
+
       subscriptionId:
         transaction.subscriptionId,
     }
   );
+
+  return userId;
 }
 
 /* =========================================================
@@ -1106,18 +1286,16 @@ async function resolveSubscriptionUserId(
    ========================================================= */
 
 async function handleSubscriptionEvent(
-  event:
-    PaddleEventLike
+  event: PaddleEventLike
 ) {
-  const eventId =
-    getEventId(
-      event
-    );
-
   const subscription =
     normalizeSubscription(
       event.data
     );
+
+  assertAllowedProPriceId(
+    subscription.priceId
+  );
 
   const userId =
     await resolveSubscriptionUserId(
@@ -1130,6 +1308,53 @@ async function handleSubscriptionEvent(
     console.warn(
       "PADDLE SUBSCRIPTION WITHOUT USER:",
       {
+        eventId:
+          getEventId(
+            event
+          ),
+
+        eventType:
+          getEventType(
+            event
+          ),
+
+        subscriptionId:
+          subscription.id,
+      }
+    );
+
+    return null;
+  }
+
+  const eventId =
+    getEventId(
+      event
+    );
+
+  if (
+    !eventId
+  ) {
+    throw new Error(
+      "Paddle event ID is missing."
+    );
+  }
+
+  const eventAllowed =
+    await claimPaddleEventOrder(
+      userId,
+      eventId,
+      getOccurredAt(
+        event
+      )
+    );
+
+  if (
+    !eventAllowed
+  ) {
+    console.log(
+      "IGNORED STALE PADDLE SUBSCRIPTION EVENT:",
+      {
+        userId,
         eventId,
         eventType:
           getEventType(
@@ -1140,13 +1365,24 @@ async function handleSubscriptionEvent(
       }
     );
 
-    return;
+    return userId;
+  }
+
+  const subscriptionStatus =
+    subscription.status;
+
+  if (
+    !subscriptionStatus
+  ) {
+    throw new Error(
+      "Paddle event contains an unrecognized subscription status."
+    );
   }
 
   const effectivePlan =
-    subscription.status ===
+    subscriptionStatus ===
       "active" ||
-    subscription.status ===
+    subscriptionStatus ===
       "trialing"
       ? "pro"
       : "free";
@@ -1168,7 +1404,7 @@ async function handleSubscriptionEvent(
               effectivePlan,
 
             status:
-              subscription.status,
+              subscriptionStatus,
 
             paddle_customer_id:
               subscription.customerId,
@@ -1229,8 +1465,7 @@ async function handleSubscriptionEvent(
 
   if (
     !data ||
-    data.length ===
-      0
+    data.length === 0
   ) {
     throw new Error(
       "No user_plans row exists for this subscription."
@@ -1241,14 +1476,19 @@ async function handleSubscriptionEvent(
     "PADDLE SUBSCRIPTION SYNCED:",
     {
       userId,
+
       status:
-        subscription.status,
+        subscriptionStatus,
+
       subscriptionId:
         subscription.id,
+
       cancelAtPeriodEnd:
         subscription.cancelAtPeriodEnd,
     }
   );
+
+  return userId;
 }
 
 /* =========================================================
@@ -1256,9 +1496,16 @@ async function handleSubscriptionEvent(
    ========================================================= */
 
 export async function POST(
-  request:
-    Request
+  request: Request
 ) {
+  let claimedEventId:
+    string | null =
+      null;
+
+  let relatedUserId:
+    string | null =
+      null;
+
   try {
     const webhookSecret =
       process.env
@@ -1277,7 +1524,7 @@ export async function POST(
             false,
 
           error:
-            "Webhook secret is not configured.",
+            "Webhook service is unavailable.",
         },
         {
           status:
@@ -1309,13 +1556,6 @@ export async function POST(
       );
     }
 
-    /*
-      IMPORTANT:
-      Paddle requires the exact raw request body.
-
-      Do not call request.json() before unmarshal().
-    */
-
     const rawBody =
       await request.text();
 
@@ -1327,11 +1567,13 @@ export async function POST(
 
     try {
       verifiedEvent =
-        await paddle.webhooks.unmarshal(
-          rawBody,
-          webhookSecret,
-          signature
-        );
+        await paddle
+          .webhooks
+          .unmarshal(
+            rawBody,
+            webhookSecret,
+            signature
+          );
     } catch (
       verificationError
     ) {
@@ -1356,7 +1598,8 @@ export async function POST(
     }
 
     const event =
-      verifiedEvent as PaddleEventLike;
+      verifiedEvent as
+        PaddleEventLike;
 
     const eventId =
       getEventId(
@@ -1368,6 +1611,19 @@ export async function POST(
         event
       );
 
+    const occurredAt =
+      getOccurredAt(
+        event
+      );
+
+    if (
+      !eventId
+    ) {
+      throw new Error(
+        "Paddle event ID is missing."
+      );
+    }
+
     if (
       !eventType
     ) {
@@ -1376,28 +1632,47 @@ export async function POST(
       );
     }
 
-    if (
-      eventId &&
-      await eventAlreadyProcessed(
-        eventId
-      )
-    ) {
-      return NextResponse.json({
-        success:
-          true,
+    const claim =
+      await claimWebhookEvent(
+        eventId,
+        eventType,
+        occurredAt
+      );
 
-        duplicate:
-          true,
-      });
+    if (
+      !claim.claimed
+    ) {
+      return NextResponse.json(
+        {
+          success:
+            true,
+
+          duplicate:
+            true,
+
+          status:
+            claim.currentStatus,
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        }
+      );
     }
+
+    claimedEventId =
+      eventId;
 
     switch (
       eventType
     ) {
       case "transaction.completed": {
-        await handleTransactionCompleted(
-          event
-        );
+        relatedUserId =
+          await handleTransactionCompleted(
+            event
+          );
 
         break;
       }
@@ -1409,9 +1684,10 @@ export async function POST(
       case "subscription.paused":
       case "subscription.resumed":
       case "subscription.canceled": {
-        await handleSubscriptionEvent(
-          event
-        );
+        relatedUserId =
+          await handleSubscriptionEvent(
+            event
+          );
 
         break;
       }
@@ -1424,10 +1700,25 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
-      success:
-        true,
-    });
+    await finishWebhookEvent(
+      eventId,
+      "processed",
+      relatedUserId,
+      null
+    );
+
+    return NextResponse.json(
+      {
+        success:
+          true,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
   } catch (
     error
   ) {
@@ -1435,6 +1726,28 @@ export async function POST(
       "PADDLE WEBHOOK ERROR:",
       error
     );
+
+    if (
+      claimedEventId
+    ) {
+      try {
+        await finishWebhookEvent(
+          claimedEventId,
+          "failed",
+          relatedUserId,
+          error instanceof Error
+            ? error.message
+            : "Webhook processing failed."
+        );
+      } catch (
+        finishError
+      ) {
+        console.error(
+          "PADDLE WEBHOOK FAILURE MARK ERROR:",
+          finishError
+        );
+      }
+    }
 
     return NextResponse.json(
       {
@@ -1447,6 +1760,11 @@ export async function POST(
       {
         status:
           500,
+
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
       }
     );
   }

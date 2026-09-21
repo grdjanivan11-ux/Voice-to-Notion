@@ -11,6 +11,10 @@ import {
 } from "@/lib/rate-limit";
 
 import {
+  supabaseAdmin,
+} from "@/lib/supabase-admin";
+
+import {
   getAuthenticatedUser,
 } from "@/lib/usage";
 
@@ -24,6 +28,14 @@ const NOTION_OAUTH_START_RATE_LIMIT = {
   windowSeconds:
     60,
 } as const;
+
+const OAUTH_STATE_TTL_MS =
+  10 *
+  60 *
+  1000;
+
+const NOTION_CALLBACK_PATH =
+  "/api/notion/oauth/callback";
 
 function getRetryAfterSeconds(
   resetAt:
@@ -60,15 +72,57 @@ function getRetryAfterSeconds(
   );
 }
 
+function getValidatedRedirectUri(
+  value:
+    string
+) {
+  let url:
+    URL;
+
+  try {
+    url =
+      new URL(
+        value
+      );
+  } catch {
+    return null;
+  }
+
+  const isLocalhost =
+    url.hostname ===
+      "localhost" ||
+    url.hostname ===
+      "127.0.0.1";
+
+  const allowedProtocol =
+    url.protocol ===
+      "https:" ||
+    (
+      isLocalhost &&
+      url.protocol ===
+        "http:"
+    );
+
+  if (
+    !allowedProtocol ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !==
+      NOTION_CALLBACK_PATH
+  ) {
+    return null;
+  }
+
+  return url.toString();
+}
+
 export async function GET(
   request:
     Request
 ) {
   try {
-    /* =====================================================
-       AUTH
-       ===================================================== */
-
     const user =
       await getAuthenticatedUser(
         request
@@ -88,10 +142,6 @@ export async function GET(
         }
       );
     }
-
-    /* =====================================================
-       SHORT-TERM RATE LIMIT
-       ===================================================== */
 
     const rateLimit =
       await checkRateLimit(
@@ -143,10 +193,6 @@ export async function GET(
       );
     }
 
-    /* =====================================================
-       ENVIRONMENT
-       ===================================================== */
-
     const clientId =
       process.env
         .NOTION_OAUTH_CLIENT_ID;
@@ -155,14 +201,14 @@ export async function GET(
       process.env
         .NOTION_OAUTH_CLIENT_SECRET;
 
-    const redirectUri =
+    const configuredRedirectUri =
       process.env
         .NOTION_OAUTH_REDIRECT_URI;
 
     if (
       !clientId ||
       !clientSecret ||
-      !redirectUri
+      !configuredRedirectUri
     ) {
       console.error(
         "NOTION OAUTH ENVIRONMENT CONFIGURATION IS MISSING"
@@ -180,18 +226,41 @@ export async function GET(
       );
     }
 
-    /* =====================================================
-       BUILD SIGNED OAUTH STATE
+    const redirectUri =
+      getValidatedRedirectUri(
+        configuredRedirectUri
+      );
 
-       Format:
-       timestamp.nonce.userId.signature
-       ===================================================== */
+    if (
+      !redirectUri
+    ) {
+      console.error(
+        "NOTION OAUTH REDIRECT URI CONFIGURATION IS INVALID"
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Notion connection service is unavailable.",
+        },
+        {
+          status:
+            500,
+        }
+      );
+    }
 
     const timestamp =
       Date.now();
 
     const nonce =
       crypto.randomUUID();
+
+    const expiresAt =
+      new Date(
+        timestamp +
+          OAUTH_STATE_TTL_MS
+      ).toISOString();
 
     const payload =
       `${timestamp}.${nonce}.${user.id}`;
@@ -211,9 +280,43 @@ export async function GET(
     const state =
       `${payload}.${signature}`;
 
-    /* =====================================================
-       BUILD NOTION AUTHORIZE URL
-       ===================================================== */
+    const {
+      error:
+        stateInsertError,
+    } =
+      await supabaseAdmin
+        .from(
+          "oauth_states"
+        )
+        .insert({
+          nonce,
+          user_id:
+            user.id,
+          provider:
+            "notion",
+          expires_at:
+            expiresAt,
+        });
+
+    if (
+      stateInsertError
+    ) {
+      console.error(
+        "NOTION OAUTH STATE INSERT ERROR:",
+        stateInsertError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Could not start Notion connection securely.",
+        },
+        {
+          status:
+            500,
+        }
+      );
+    }
 
     const authorizationUrl =
       new URL(
@@ -245,13 +348,6 @@ export async function GET(
       state
     );
 
-    /* =====================================================
-       SUCCESS
-
-       The browser receives the URL and performs the actual
-       navigation to Notion after this authenticated request.
-       ===================================================== */
-
     return NextResponse.json(
       {
         success:
@@ -262,6 +358,12 @@ export async function GET(
       },
       {
         headers: {
+          "Cache-Control":
+            "no-store",
+
+          "X-Content-Type-Options":
+            "nosniff",
+
           "X-RateLimit-Limit":
             String(
               NOTION_OAUTH_START_RATE_LIMIT.limit
