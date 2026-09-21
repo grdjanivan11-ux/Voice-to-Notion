@@ -61,26 +61,25 @@ export default function BillingSuccessPage() {
             </span>
 
             <h1 className="mt-3 text-3xl font-black tracking-[-0.04em]">
-              Paddle Checkout works.
+              Welcome to Voice to Notion Pro.
             </h1>
 
             <p className="mx-auto mt-4 max-w-md text-xs leading-6 text-[var(--muted)]">
-              The test transaction completed successfully. Automatic Pro
-              activation is not enabled yet because the secure Paddle webhook
-              is the next stage of the integration.
+              Your Paddle Sandbox checkout completed successfully. Pro access
+              is activated automatically after the secure Paddle webhook
+              confirms the subscription.
             </p>
 
             <div className="mt-6 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-left">
 
               <p className="text-[9px] font-black uppercase tracking-[0.14em] text-violet-300">
-                Next
+                Pro activated
               </p>
 
               <p className="mt-2 text-xs leading-6 text-[var(--muted-strong)]">
-                C9.3.6 will verify Paddle webhook signatures, identify your
-                Supabase user from checkout metadata, save Paddle customer and
-                subscription IDs, and automatically switch the account from
-                Free to Pro.
+                Your Voice to Notion account is linked to Paddle through your
+                authenticated Supabase user. Billing events are verified by the
+                secure webhook and your plan is updated automatically.
               </p>
 
             </div>
