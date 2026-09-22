@@ -1,6 +1,5 @@
-import {
-  NextResponse,
-} from "next/server";
+
+import { NextResponse } from "next/server";
 
 import {
   getAuthenticatedUser,
@@ -9,39 +8,38 @@ import {
 
 /* =========================================================
    VOICE TO NOTION
-   C9.2 — PLAN + ENTITLEMENTS + USAGE
+
+   C9.5.10 — PRODUCTION SECURITY QA
 
    GET /api/usage
+
+   Returns the authenticated user's plan,
+   entitlements, and usage information.
+
+   All responses explicitly disable caching.
    ========================================================= */
 
-export async function GET(
-  request:
-    Request
-) {
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+};
+
+export async function GET(request: Request) {
   try {
     /* =====================================================
-       AUTH
+       AUTHENTICATION
        ===================================================== */
 
-    const user =
-      await getAuthenticatedUser(
-        request
-      );
+    const user = await getAuthenticatedUser(request);
 
-    if (
-      !user
-    ) {
+    if (!user) {
       return NextResponse.json(
         {
-          success:
-            false,
-
-          error:
-            "Authentication required.",
+          success: false,
+          error: "Authentication required.",
         },
         {
-          status:
-            401,
+          status: 401,
+          headers: NO_STORE_HEADERS,
         }
       );
     }
@@ -50,67 +48,44 @@ export async function GET(
        PLAN + USAGE
        ===================================================== */
 
-    const result =
-      await getUsageWithPlan(
-        user.id
-      );
+    const result = await getUsageWithPlan(user.id);
 
     /* =====================================================
-       RESPONSE
+       SUCCESS RESPONSE
        ===================================================== */
-
-    return NextResponse.json({
-      success:
-        true,
-
-      plan:
-        result.plan.name,
-
-      planStatus:
-        result.plan.status,
-
-      planDetails: {
-        name:
-          result.plan.name,
-
-        displayName:
-          result.plan
-            .displayName,
-
-        status:
-          result.plan.status,
-
-        currentPeriodEnd:
-          result.plan
-            .currentPeriodEnd,
-      },
-
-      entitlements:
-        result.plan
-          .entitlements,
-
-      usage:
-        result.usage,
-    });
-  } catch (
-    error
-  ) {
-    console.error(
-      "USAGE API ERROR:",
-      error
-    );
 
     return NextResponse.json(
       {
-        success:
-          false,
+        success: true,
+        plan: result.plan.name,
+        planStatus: result.plan.status,
 
-        error:
-          "Could not load usage.",
+        planDetails: {
+          name: result.plan.name,
+          displayName: result.plan.displayName,
+          status: result.plan.status,
+          currentPeriodEnd: result.plan.currentPeriodEnd,
+        },
+
+        entitlements: result.plan.entitlements,
+        usage: result.usage,
       },
       {
-        status:
-          500,
+        status: 200,
+        headers: NO_STORE_HEADERS,
+      }
+    );
+  } catch (error) {
+    console.error("USAGE API ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Could not load usage.",
+      },
+      {
+        status: 500,
+        headers: NO_STORE_HEADERS,
       }
     );
   }
