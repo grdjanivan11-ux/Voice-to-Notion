@@ -414,6 +414,17 @@ export default function Home() {
     useState(false);
 
   /* =======================================================
+     ADMIN ANALYTICS NAVIGATION
+     Server checks access; never infer admin status from plan.
+     ======================================================= */
+
+  const [
+    isAdmin,
+    setIsAdmin,
+  ] =
+    useState(false);
+
+  /* =======================================================
      REFS
      ======================================================= */
 
@@ -505,6 +516,52 @@ export default function Home() {
     }
 
     loadAccount();
+  }, []);
+
+  /* =========================================================
+     ADMINISTRATOR ACCESS
+     The existing protected analytics endpoint is the authority.
+     If the request fails or is denied, hide the navigation link.
+     ========================================================= */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAdminAccess() {
+      try {
+        const {
+          data: { session },
+        } = await supabaseBrowser.auth.getSession();
+
+        if (!session) {
+          return;
+        }
+
+        const response = await fetch(
+          "/api/admin/analytics",
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+        if (!cancelled) {
+          setIsAdmin(response.ok);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsAdmin(false);
+        }
+      }
+    }
+
+    void checkAdminAccess();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* =========================================================
@@ -2373,7 +2430,17 @@ export default function Home() {
 
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
+
+                  {isAdmin && (
+                    <a
+                      href="/admin/analytics"
+                      className="vtn-secondary flex min-h-9 items-center px-3 text-[9px] font-semibold"
+                      aria-label="Open Admin Analytics dashboard"
+                    >
+                      Admin Analytics
+                    </a>
+                  )}
 
                   <button
                     type="button"
