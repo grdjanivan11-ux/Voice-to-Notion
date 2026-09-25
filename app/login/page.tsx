@@ -75,9 +75,7 @@ export default function LoginPage() {
       if (
         session
       ) {
-        router.replace(
-          "/"
-        );
+        router.replace("/app");
       }
     }
 
@@ -180,9 +178,7 @@ export default function LoginPage() {
           return;
         }
 
-        router.replace(
-          "/"
-        );
+        router.replace("/app");
 
         router.refresh();
 
@@ -208,9 +204,7 @@ export default function LoginPage() {
         throw signInError;
       }
 
-      router.replace(
-        "/"
-      );
+      router.replace("/app");
 
       router.refresh();
     } catch (err) {

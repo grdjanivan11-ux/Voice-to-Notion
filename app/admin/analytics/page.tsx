@@ -297,7 +297,7 @@ export default function AdminAnalyticsPage() {
         <header className="mb-12 flex flex-wrap items-center justify-between gap-5">
           <div>
             <Link
-              href="/"
+              href="/app"
               className="mb-5 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
             >
               <span aria-hidden="true">←</span>
@@ -387,7 +387,7 @@ export default function AdminAnalyticsPage() {
             </p>
 
             <Link
-              href="/"
+              href="/app"
               className="mt-6 inline-flex rounded-xl border border-white/10 px-5 py-3 font-semibold transition hover:bg-white/10"
             >
               Return to app

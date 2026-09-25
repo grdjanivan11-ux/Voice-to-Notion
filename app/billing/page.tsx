@@ -177,7 +177,7 @@ export default function BillingPage() {
           <header className="vtn-glass flex items-center justify-between gap-3 rounded-[20px] px-4 py-3 sm:px-5">
 
             <a
-              href="/"
+              href="/app"
               className="flex min-w-0 items-center gap-3"
             >
 
@@ -464,7 +464,7 @@ export default function BillingPage() {
           </section>
 
           <a
-            href="/"
+            href="/app"
             className="mx-auto mt-6 block w-fit text-xs text-[var(--muted)] transition hover:text-[var(--foreground)]"
           >
             ← Back to Voice to Notion
