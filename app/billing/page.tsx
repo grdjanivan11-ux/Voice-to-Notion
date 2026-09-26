@@ -320,7 +320,7 @@ export default function BillingPage() {
                     <div className="flex items-end gap-2">
 
                       <span className="text-5xl font-black tracking-[-0.05em]">
-                        €9.99
+                        €8.80
                       </span>
 
                       <span className="pb-1 text-sm text-[var(--muted)]">
@@ -340,7 +340,7 @@ export default function BillingPage() {
                     <div className="flex items-end gap-2">
 
                       <span className="text-5xl font-black tracking-[-0.05em]">
-                        €99
+                        €80
                       </span>
 
                       <span className="pb-1 text-sm text-[var(--muted)]">
@@ -350,7 +350,7 @@ export default function BillingPage() {
                     </div>
 
                     <p className="mt-2 text-[10px] text-[var(--muted)]">
-                      About €8.25/month when billed annually.
+                      About €6.67/month when billed annually.
                     </p>
 
                   </>
@@ -452,10 +452,11 @@ export default function BillingPage() {
                 </p>
 
                 <p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">
-                  Checkout is functional in this stage, but automatic Pro
-                  activation is intentionally coming next with our verified
-                  Paddle webhook.
-                </p>
+  This checkout uses Paddle Sandbox for testing.
+  No real payments are collected. Pro access is
+  updated automatically after our secure Paddle
+  webhook verifies the subscription.
+</p>
 
               </div>
 
